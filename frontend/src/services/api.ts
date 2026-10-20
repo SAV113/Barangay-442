@@ -179,4 +179,10 @@ export const usersApi = {
   delete: (id: number) => api.delete(`/users/${id}`),
 };
 
+// ---- Settings ----
+export const settingsApi = {
+  getAll: () => api.get('/settings'),
+  update: (key: string, value: string) => api.patch(`/settings/${key}`, { value }),
+};
+
 export default api;

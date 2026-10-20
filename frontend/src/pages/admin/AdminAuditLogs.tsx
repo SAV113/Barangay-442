@@ -1,22 +1,14 @@
-import React, { useState } from 'react';
-import { Search, ShieldCheck, Filter, User, Clock } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, ShieldCheck, Clock } from 'lucide-react';
 import { AdminLayout } from '../../components/layout/AdminLayout';
+import { auditLogsApi } from '../../services/api';
 import { format, parseISO } from 'date-fns';
+import toast from 'react-hot-toast';
 
-const DEMO_LOGS = [
-  { id: 1, userName: 'Maria Santos', action: 'CREATE', module: 'beneficiaries', recordId: 1, details: 'Created beneficiary BRY442-SC-001 for Pedro Lim', createdAt: '2026-08-11T10:05:00Z' },
-  { id: 2, userName: 'Maria Santos', action: 'CREATE', module: 'payout_programs', recordId: 1, details: 'Created payout program: Ayuda sa Matatanda', createdAt: '2026-08-11T09:45:00Z' },
-  { id: 3, userName: 'Jose Reyes', action: 'UPDATE', module: 'payout_transactions', recordId: 1, details: 'Updated transaction status to CLAIMED for BRY442-SC-001', createdAt: '2026-08-11T09:30:00Z' },
-  { id: 4, userName: 'Jose Reyes', action: 'CREATE', module: 'resource_distributions', recordId: 1, details: 'Distributed 1 bag of Premium Rice to BRY442-SC-001', createdAt: '2026-08-11T09:15:00Z' },
-  { id: 5, userName: 'Maria Santos', action: 'PUBLISH', module: 'announcements', recordId: 1, details: 'Published announcement: Barangay Clean-Up Drive', createdAt: '2026-08-10T16:30:00Z' },
-  { id: 6, userName: 'Maria Santos', action: 'PUBLISH', module: 'events', recordId: 1, details: 'Published event: Barangay Assembly - 3rd Quarter 2026', createdAt: '2026-08-10T16:00:00Z' },
-  { id: 7, userName: 'Ana Cruz', action: 'CREATE', module: 'resource_distributions', recordId: 5, details: 'Distributed 5 canned sardines to BRY442-4PS-001', createdAt: '2026-08-10T14:30:00Z' },
-  { id: 8, userName: 'Maria Santos', action: 'CREATE', module: 'resources', recordId: 1, details: 'Added resource: Premium Rice (500 bags)', createdAt: '2026-08-10T10:00:00Z' },
-  { id: 9, userName: 'Jose Reyes', action: 'LOGIN', module: 'auth', details: 'User logged in successfully', createdAt: '2026-08-10T08:00:00Z' },
-  { id: 10, userName: 'Maria Santos', action: 'CREATE', module: 'payout_schedules', recordId: 1, details: 'Scheduled August 2026 Senior Citizen Payout', createdAt: '2026-08-09T15:00:00Z' },
-  { id: 11, userName: 'Maria Santos', action: 'UPDATE', module: 'beneficiaries', recordId: 8, details: 'Updated beneficiary BRY442-IND-002 status to inactive', createdAt: '2026-08-09T14:00:00Z' },
-  { id: 12, userName: 'Ana Cruz', action: 'CREATE', module: 'events', recordId: 3, details: 'Created event: Community Clean-Up Drive', createdAt: '2026-08-08T10:00:00Z' },
-];
+interface AuditLog {
+  id: number; userId: number; userName: string; action: string; module: string;
+  recordId?: number; details: string; ipAddress?: string; createdAt: string;
+}
 
 const actionBadge: Record<string, string> = {
   CREATE: 'badge-success', UPDATE: 'badge-info', DELETE: 'badge-error',
@@ -33,17 +25,30 @@ const moduleLabels: Record<string, string> = {
 };
 
 export default function AdminAuditLogs() {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [moduleFilter, setModuleFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
-  const [page, setPage] = useState(1);
-  const perPage = 10;
 
-  const filtered = DEMO_LOGS.filter(l => {
-    const sMatch = !search || l.details.toLowerCase().includes(search.toLowerCase()) || l.userName.toLowerCase().includes(search.toLowerCase());
-    const mMatch = !moduleFilter || l.module === moduleFilter;
-    const aMatch = !actionFilter || l.action === actionFilter;
-    return sMatch && mMatch && aMatch;
+  const fetchLogs = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params: Record<string, unknown> = { limit: 100 };
+      if (moduleFilter) params.module = moduleFilter;
+      if (actionFilter) params.action = actionFilter;
+      if (search) params.search = search;
+      const res = await auditLogsApi.getAll(params);
+      setLogs(res.data.data || res.data || []);
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to load audit logs'); }
+    finally { setLoading(false); }
+  }, [search, moduleFilter, actionFilter]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  const filtered = logs.filter(l => {
+    const sMatch = !search || l.details?.toLowerCase().includes(search.toLowerCase()) || l.userName?.toLowerCase().includes(search.toLowerCase());
+    return sMatch;
   });
 
   return (
@@ -75,42 +80,43 @@ export default function AdminAuditLogs() {
             </select>
             <select id="audit-action-filter" value={actionFilter} onChange={e => setActionFilter(e.target.value)} className="form-input w-full sm:w-36">
               <option value="">All Actions</option>
-              <option value="CREATE">Create</option>
-              <option value="UPDATE">Update</option>
-              <option value="DELETE">Delete</option>
-              <option value="PUBLISH">Publish</option>
-              <option value="LOGIN">Login</option>
+              <option value="CREATE">Create</option><option value="UPDATE">Update</option>
+              <option value="DELETE">Delete</option><option value="PUBLISH">Publish</option><option value="LOGIN">Login</option>
             </select>
           </div>
         </div>
 
         {/* Timeline View */}
-        <div className="flex flex-col gap-2">
-          {filtered.map(log => (
-            <div key={log.id} id={`audit-log-${log.id}`} className="card card-compact hover:shadow-md transition-shadow">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                  {log.userName.split(' ').map(n => n[0]).join('')}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="font-semibold text-gray-900 text-sm">{log.userName}</span>
-                    <span className={`badge ${actionBadge[log.action] ?? 'badge-gray'} text-xs`}>{log.action}</span>
-                    <span className="chip text-xs">{moduleLabels[log.module] ?? log.module}</span>
+        {loading ? (
+          <div className="flex items-center justify-center py-20"><div className="w-8 h-8 rounded-full border-[3px] border-gray-200 border-t-[#1e3a8a] animate-spin" /></div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filtered.map(log => (
+              <div key={log.id} id={`audit-log-${log.id}`} className="card card-compact hover:shadow-md transition-shadow">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                    {(log.userName || 'S').split(' ').map(n => n[0]).join('')}
                   </div>
-                  <p className="text-sm text-gray-600">{log.details}</p>
-                  <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
-                    <Clock size={11} />
-                    {format(parseISO(log.createdAt), 'MMM d, yyyy h:mm a')}
-                    {log.recordId && <span className="ml-3">Record #{log.recordId}</span>}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="font-semibold text-gray-900 text-sm">{log.userName || 'System'}</span>
+                      <span className={`badge ${actionBadge[log.action] ?? 'badge-gray'} text-xs`}>{log.action}</span>
+                      <span className="chip text-xs">{moduleLabels[log.module] ?? log.module}</span>
+                    </div>
+                    <p className="text-sm text-gray-600">{log.details}</p>
+                    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
+                      <Clock size={11} />
+                      {format(parseISO(log.createdAt), 'MMM d, yyyy h:mm a')}
+                      {log.recordId && <span className="ml-3">Record #{log.recordId}</span>}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {filtered.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <div className="card"><div className="empty-state"><div className="empty-state-icon"><ShieldCheck size={28} /></div><p className="font-semibold text-gray-500">No audit logs found</p><p className="text-sm text-gray-400">Try adjusting your filters.</p></div></div>
         )}
       </div>

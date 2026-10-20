@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Calendar, Wallet, Megaphone, User, Settings, LogOut, Building2, ChevronRight, MapPin, Clock, FileText } from 'lucide-react';
+import { Bell, Calendar, Wallet, Megaphone, User, Settings, LogOut, Building2, ChevronRight, MapPin, Clock, FileText, Loader2 } from 'lucide-react';
 import { PublicNavbar, PublicFooter } from '../../components/layout/PublicLayout';
 import { useAuth } from '../../contexts/AuthContext';
+import { announcementsApi, eventsApi } from '../../services/api';
+import type { Announcement, BarangayEvent } from '../../types';
 import { format, parseISO } from 'date-fns';
 
 const quickLinks = [
@@ -12,20 +14,29 @@ const quickLinks = [
   { icon: FileText, title: 'Request Information', desc: 'Access public barangay documents', link: '/services', color: 'bg-violet-50', iconColor: 'text-violet-600' },
 ];
 
-const recentAnnouncements = [
-  { id: 5, title: 'Emergency Protocol: Typhoon Preparedness', category: 'emergency', date: '2026-08-11' },
-  { id: 4, title: 'Livelihood Training Program', category: 'livelihood', date: '2026-08-10' },
-  { id: 3, title: 'Barangay Assembly - August 28', category: 'community', date: '2026-08-08' },
-];
-
-const upcomingEvents = [
-  { id: 3, title: 'Community Clean-Up Drive', date: '2026-08-15', time: '6:00 AM', location: 'Various locations' },
-  { id: 2, title: 'Libre Medical Mission', date: '2026-08-18', time: '7:00 AM', location: 'Health Center' },
-  { id: 1, title: 'Senior Citizen Payout', date: '2026-08-20', time: '8:00 AM', location: 'Barangay Hall' },
-];
+function fmtTime(t?: string) {
+  if (!t) return '';
+  try { const [h, m] = t.split(':').map(Number); const d = new Date(); d.setHours(h, m); return format(d, 'h:mm a'); } catch { return t; }
+}
 
 export default function ResidentDashboard() {
   const { user, logout } = useAuth();
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [events, setEvents] = useState<BarangayEvent[]>([]);
+  const [loadingA, setLoadingA] = useState(true);
+  const [loadingE, setLoadingE] = useState(true);
+
+  useEffect(() => {
+    announcementsApi.getPublished({ limit: 5 })
+      .then(r => setAnnouncements(r.data?.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingA(false));
+
+    eventsApi.getPublished({ limit: 5 })
+      .then(r => setEvents(r.data?.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingE(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -47,9 +58,6 @@ export default function ResidentDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Link to="/resident/profile" className="btn btn-outline-white btn-sm">
-                <User size={14} /> Profile
-              </Link>
               <button onClick={() => logout()} className="btn btn-outline-white btn-sm text-red-200 border-red-300/50 hover:bg-red-500/20">
                 <LogOut size={14} /> Sign Out
               </button>
@@ -77,20 +85,26 @@ export default function ResidentDashboard() {
               <h2 className="font-bold text-gray-900 font-display">Recent Announcements</h2>
               <Link to="/announcements" className="text-xs text-[#1e3a8a] font-semibold hover:underline">View All</Link>
             </div>
-            <div className="flex flex-col gap-2">
-              {recentAnnouncements.map(a => (
-                <Link key={a.id} to={`/announcements/${a.id}`} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
-                  <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
-                    <Megaphone size={16} className="text-amber-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1e3a8a] truncate">{a.title}</p>
-                    <p className="text-xs text-gray-400">{format(parseISO(a.date), 'MMM d, yyyy')} · <span className="capitalize">{a.category}</span></p>
-                  </div>
-                  <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
-                </Link>
-              ))}
-            </div>
+            {loadingA ? (
+              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" size={24} /></div>
+            ) : announcements.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-8">No announcements yet</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {announcements.map(a => (
+                  <Link key={a.id} to={`/announcements/${a.id}`} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                    <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                      <Megaphone size={16} className="text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1e3a8a] truncate">{a.title}</p>
+                      <p className="text-xs text-gray-400">{a.publishedAt ? format(parseISO(a.publishedAt), 'MMM d, yyyy') : ''} · <span className="capitalize">{a.category}</span></p>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Upcoming Events */}
@@ -99,24 +113,30 @@ export default function ResidentDashboard() {
               <h2 className="font-bold text-gray-900 font-display">Upcoming Events</h2>
               <Link to="/events" className="text-xs text-[#1e3a8a] font-semibold hover:underline">View All</Link>
             </div>
-            <div className="flex flex-col gap-2">
-              {upcomingEvents.map(e => (
-                <Link key={e.id} to={`/events/${e.id}`} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
-                  <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-[#1e3a8a] to-[#14b8a6] rounded-xl flex flex-col items-center justify-center text-white">
-                    <span className="text-[8px] font-semibold opacity-80">{format(parseISO(e.date), 'MMM')}</span>
-                    <span className="text-sm font-extrabold leading-tight">{format(parseISO(e.date), 'd')}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1e3a8a] truncate">{e.title}</p>
-                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                      <span className="flex items-center gap-1"><Clock size={10} />{e.time}</span>
-                      <span className="flex items-center gap-1"><MapPin size={10} />{e.location}</span>
+            {loadingE ? (
+              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-300" size={24} /></div>
+            ) : events.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-8">No upcoming events</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {events.map(e => (
+                  <Link key={e.id} to={`/events/${e.id}`} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                    <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-[#1e3a8a] to-[#14b8a6] rounded-xl flex flex-col items-center justify-center text-white">
+                      <span className="text-[8px] font-semibold opacity-80">{e.eventDate ? format(parseISO(e.eventDate), 'MMM') : ''}</span>
+                      <span className="text-sm font-extrabold leading-tight">{e.eventDate ? format(parseISO(e.eventDate), 'd') : ''}</span>
                     </div>
-                  </div>
-                  <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
-                </Link>
-              ))}
-            </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1e3a8a] truncate">{e.title}</p>
+                      <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                        <span className="flex items-center gap-1"><Clock size={10} />{fmtTime(e.startTime)}</span>
+                        <span className="flex items-center gap-1"><MapPin size={10} />{e.location}</span>
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

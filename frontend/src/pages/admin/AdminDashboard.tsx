@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Wallet, Package, Share2, Calendar, Megaphone,
   TrendingUp, AlertTriangle, CheckCircle, Clock, ArrowRight,
-  Activity, BarChart3
+  Activity, BarChart3, RefreshCw
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -10,50 +10,8 @@ import {
 } from 'recharts';
 import { AdminLayout } from '../../components/layout/AdminLayout';
 import { Link } from 'react-router-dom';
-
-// Demo stats - replace with API data when backend ready
-const DEMO_STATS = {
-  totalBeneficiaries: 250,
-  activeBeneficiaries: 228,
-  upcomingPayouts: 4,
-  pendingTransactions: 89,
-  totalResources: 10,
-  lowStockItems: 2,
-  outOfStockItems: 1,
-  distributedThisMonth: 59,
-  upcomingEvents: 6,
-  publishedAnnouncements: 5,
-};
-
-const payoutStatusData = [
-  { name: 'Claimed', value: 3, color: '#16a34a' },
-  { name: 'Pending', value: 7, color: '#2563eb' },
-  { name: 'Unclaimed', value: 1, color: '#d97706' },
-  { name: 'Cancelled', value: 0, color: '#dc2626' },
-];
-
-const resourceCategoryData = [
-  { name: 'Food', quantity: 1250 },
-  { name: 'Medicine', quantity: 705 },
-  { name: 'Hygiene', quantity: 1340 },
-  { name: 'Equipment', quantity: 115 },
-];
-
-const monthlyAssistanceData = [
-  { month: 'Mar', amount: 25000, count: 48 },
-  { month: 'Apr', amount: 32000, count: 62 },
-  { month: 'May', amount: 28500, count: 55 },
-  { month: 'Jun', amount: 35000, count: 70 },
-  { month: 'Jul', amount: 31000, count: 61 },
-  { month: 'Aug', amount: 18500, count: 40 },
-];
-
-const recentAuditLogs = [
-  { id: 1, userName: 'Maria Santos', action: 'PUBLISH', module: 'announcements', details: 'Published: Barangay Assembly', createdAt: '2026-08-11T10:05:00Z' },
-  { id: 2, userName: 'Jose Reyes', action: 'CREATE', module: 'resource_distributions', details: 'Distributed 1 bag of rice', createdAt: '2026-08-11T09:30:00Z' },
-  { id: 3, userName: 'Ana Cruz', action: 'UPDATE', module: 'payout_transactions', details: 'Updated payout to CLAIMED', createdAt: '2026-08-11T09:00:00Z' },
-  { id: 4, userName: 'Maria Santos', action: 'CREATE', module: 'beneficiaries', details: 'New beneficiary: BRY442-IND-003', createdAt: '2026-08-10T14:30:00Z' },
-];
+import { dashboardApi } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const PAYOUT_COLORS = ['#16a34a', '#2563eb', '#d97706', '#dc2626'];
 
@@ -116,18 +74,105 @@ function StatCard({ title, value, icon: Icon, iconBg, iconColor, change, changeT
   return card;
 }
 
+interface DashboardStats {
+  totalBeneficiaries: number;
+  activeBeneficiaries: number;
+  upcomingPayouts: number;
+  pendingTransactions: number;
+  totalResources: number;
+  lowStockItems: number;
+  outOfStockItems: number;
+  distributedThisMonth: number;
+  upcomingEvents: number;
+  publishedAnnouncements: number;
+  payoutsByStatus: { status: string; count: number }[];
+  resourcesByCategory: { category: string; quantity: number }[];
+  monthlyAssistance: { month: string; amount: number; count: number }[];
+  recentAuditLogs: {
+    id: number; userName: string; action: string; module: string;
+    details: string; createdAt: string;
+  }[];
+}
+
 export default function AdminDashboard() {
-  const [stats] = useState(DEMO_STATS);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      const res = await dashboardApi.getStats();
+      setStats(res.data);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to load dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-4 animate-fade-in">
+            <div className="w-10 h-10 rounded-full border-[3px] border-gray-200 border-t-[#1e3a8a] animate-spin" />
+            <p className="text-gray-500 text-sm font-medium">Loading dashboard...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <AdminLayout>
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+          <p className="text-gray-500">Failed to load dashboard data.</p>
+          <button onClick={fetchStats} className="btn btn-primary">
+            <RefreshCw size={15} /> Retry
+          </button>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  // Map payout status data for pie chart
+  const statusColorMap: Record<string, string> = {
+    claimed: '#16a34a', pending: '#2563eb', unclaimed: '#d97706', cancelled: '#dc2626',
+  };
+  const payoutStatusData = (stats.payoutsByStatus || []).map(s => ({
+    name: s.status.charAt(0).toUpperCase() + s.status.slice(1),
+    value: s.count,
+    color: statusColorMap[s.status] || '#94a3b8',
+  }));
+
+  // Map resource category data for bar chart
+  const resourceCategoryData = (stats.resourcesByCategory || []).map(r => ({
+    name: r.category.charAt(0).toUpperCase() + r.category.slice(1),
+    quantity: r.quantity,
+  }));
+
+  // Monthly assistance data
+  const monthlyAssistanceData = stats.monthlyAssistance || [];
 
   return (
     <AdminLayout>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-extrabold text-gray-900 font-display">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Barangay 442, Sampaloc, Manila — Real-time overview
-          </p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900 font-display">Dashboard</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Barangay 442, Sampaloc, Manila — Real-time overview
+            </p>
+          </div>
+          <button onClick={fetchStats} className="btn btn-ghost btn-sm" title="Refresh">
+            <RefreshCw size={15} /> Refresh
+          </button>
         </div>
 
         {/* Alert: Low Stock */}
@@ -155,8 +200,6 @@ export default function AdminDashboard() {
             icon={Users}
             iconBg="bg-blue-100"
             iconColor="text-blue-600"
-            change="+3 this month"
-            changeType="up"
             link="/admin/beneficiaries"
           />
           <StatCard
@@ -173,7 +216,7 @@ export default function AdminDashboard() {
             icon={Clock}
             iconBg="bg-amber-100"
             iconColor="text-amber-600"
-            change="Action needed"
+            change={stats.pendingTransactions > 0 ? 'Action needed' : undefined}
             changeType="neutral"
             link="/admin/payouts"
           />
@@ -203,7 +246,7 @@ export default function AdminDashboard() {
             icon={AlertTriangle}
             iconBg="bg-red-100"
             iconColor="text-red-500"
-            change="Needs restock"
+            change={stats.lowStockItems > 0 ? 'Needs restock' : undefined}
             changeType="down"
             link="/admin/resources"
           />
@@ -232,30 +275,36 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="font-bold text-gray-900 text-base font-display">Monthly Assistance</h2>
-                <p className="text-gray-500 text-xs mt-0.5">Payout amount and beneficiary count (last 6 months)</p>
+                <p className="text-gray-500 text-xs mt-0.5">Payout amount and beneficiary count</p>
               </div>
               <Link to="/admin/reports" className="text-xs text-[#1e3a8a] font-semibold hover:underline flex items-center gap-1">
                 Full Report <ArrowRight size={12} />
               </Link>
             </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={monthlyAssistanceData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <Tooltip
-                  contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
-                  formatter={(val: any, name: any) => [
-                    name === 'amount' ? `₱${val.toLocaleString()}` : val,
-                    name === 'amount' ? 'Total Amount' : 'Beneficiaries',
-                  ]}
-                />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line yAxisId="left" type="monotone" dataKey="amount" stroke="#1e3a8a" strokeWidth={2.5} dot={{ r: 4, fill: '#1e3a8a' }} name="amount" />
-                <Line yAxisId="right" type="monotone" dataKey="count" stroke="#14b8a6" strokeWidth={2.5} dot={{ r: 4, fill: '#14b8a6' }} name="count" />
-              </LineChart>
-            </ResponsiveContainer>
+            {monthlyAssistanceData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={monthlyAssistanceData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
+                    formatter={(val: any, name: any) => [
+                      name === 'amount' ? `₱${val.toLocaleString()}` : val,
+                      name === 'amount' ? 'Total Amount' : 'Beneficiaries',
+                    ]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line yAxisId="left" type="monotone" dataKey="amount" stroke="#1e3a8a" strokeWidth={2.5} dot={{ r: 4, fill: '#1e3a8a' }} name="amount" />
+                  <Line yAxisId="right" type="monotone" dataKey="count" stroke="#14b8a6" strokeWidth={2.5} dot={{ r: 4, fill: '#14b8a6' }} name="count" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[220px] text-gray-400 text-sm">
+                No monthly assistance data yet
+              </div>
+            )}
           </div>
 
           {/* Payout Status Pie Chart */}
@@ -264,35 +313,43 @@ export default function AdminDashboard() {
               <h2 className="font-bold text-gray-900 text-base font-display">Payout Status</h2>
               <p className="text-gray-500 text-xs mt-0.5">Transaction distribution</p>
             </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie
-                  data={payoutStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={45}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {payoutStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+            {payoutStatusData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie
+                      data={payoutStatusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {payoutStatusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-col gap-2 mt-2">
+                  {payoutStatusData.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                        <span className="text-gray-600">{item.name}</span>
+                      </div>
+                      <span className="font-semibold text-gray-800">{item.value}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-col gap-2 mt-2">
-              {payoutStatusData.map((item) => (
-                <div key={item.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
-                    <span className="text-gray-600">{item.name}</span>
-                  </div>
-                  <span className="font-semibold text-gray-800">{item.value}</span>
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">
+                No payout data yet
+              </div>
+            )}
           </div>
         </div>
 
@@ -309,15 +366,21 @@ export default function AdminDashboard() {
                 Manage <ArrowRight size={12} />
               </Link>
             </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={resourceCategoryData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
-                <Bar dataKey="quantity" fill="#14b8a6" radius={[6, 6, 0, 0]} name="Quantity" />
-              </BarChart>
-            </ResponsiveContainer>
+            {resourceCategoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={resourceCategoryData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Bar dataKey="quantity" fill="#14b8a6" radius={[6, 6, 0, 0]} name="Quantity" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[180px] text-gray-400 text-sm">
+                No resource data yet
+              </div>
+            )}
           </div>
 
           {/* Recent Audit Logs */}
@@ -333,23 +396,27 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex flex-col gap-3">
-              {recentAuditLogs.map((log) => (
-                <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                    {log.userName.split(' ').map(n => n[0]).join('')}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-900">{log.userName}</span>
-                      <span className={`badge badge-sm ${actionColors[log.action] ?? 'badge-gray'} text-xs`}>
-                        {log.action}
-                      </span>
+              {(stats.recentAuditLogs || []).length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">No recent activity</p>
+              ) : (
+                (stats.recentAuditLogs || []).slice(0, 5).map((log) => (
+                  <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                      {(log.userName || 'S').split(' ').map(n => n[0]).join('')}
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{log.details}</p>
-                    <p className="text-xs text-gray-400 mt-0.5 capitalize">{log.module.replace('_', ' ')} · {formatTime(log.createdAt)}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">{log.userName || 'System'}</span>
+                        <span className={`badge badge-sm ${actionColors[log.action] ?? 'badge-gray'} text-xs`}>
+                          {log.action}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">{log.details}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 capitalize">{(log.module || '').replace('_', ' ')} · {formatTime(log.createdAt)}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
