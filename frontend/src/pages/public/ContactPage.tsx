@@ -8,9 +8,10 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = e.currentTarget;
     setLoading(true);
     try {
-      const formData = new FormData(e.currentTarget);
+      const formData = new FormData(form);
       const payload = {
         access_key: 'fbb794a4-0893-45ae-b6bd-13f8e3455715',
         name: `${formData.get('firstName') ?? ''} ${formData.get('lastName') ?? ''}`.trim(),
@@ -29,7 +30,7 @@ export default function ContactPage() {
       const result = await response.json();
       if (result.success) {
         toast.success('Salamat! Naipadala na ang iyong mensahe sa Barangay.');
-        e.currentTarget.reset();
+        form.reset();
       } else {
         toast.error('May nangyaring error. Pakisubukang muli.');
         console.error('Web3Forms error:', result);
