@@ -9,9 +9,11 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
-  Lock,
-  Phone,
+  Heart,
+  Dog,
   HelpCircle,
+  UserCheck,
+  RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authApi } from '../../services/api';
@@ -19,18 +21,20 @@ import { authApi } from '../../services/api';
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
 
-  // Wizard steps: 1 = Verify identity, 2 = Set new password, 3 = Success
+  // Wizard steps: 1 = Verify identity via Security Questions, 2 = Set new password, 3 = Success
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1 Form Data
   const [email, setEmail] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [verificationKey, setVerificationKey] = useState('');
+  const [questionsLoaded, setQuestionsLoaded] = useState(false);
+  const [question1, setQuestion1] = useState("What is your mother's name?");
+  const [answer1, setAnswer1] = useState('');
+  const [question2, setQuestion2] = useState("What is your dog's name?");
+  const [answer2, setAnswer2] = useState('');
+  const [residentName, setResidentName] = useState('');
 
   // Step 2 Form Data
   const [resetToken, setResetToken] = useState('');
-  const [residentName, setResidentName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -48,33 +52,61 @@ export default function ForgotPasswordPage() {
   };
   const isPasswordValid = passwordStrength.length && passwordStrength.uppercase && passwordStrength.number;
 
-  // Handle Step 1: Verify Resident
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle Fetching Security Questions for entered email
+  const handleFetchQuestions = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setErrorMessage('');
 
-    if (!email || !firstName || !lastName) {
-      setErrorMessage('Please fill in your registered email, first name, and last name.');
+    if (!email || !email.trim()) {
+      setErrorMessage('Please enter your registered email address.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const res = await authApi.verifyResident({
+      const res = await authApi.getSecurityQuestions(email.trim());
+      setQuestion1(res.data.question1 || "What is your mother's maiden name?");
+      setQuestion2(res.data.question2 || "What is your pet or dog's name?");
+      setResidentName(res.data.residentName);
+      setQuestionsLoaded(true);
+      toast.success(`Account found: ${res.data.residentName}`);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'No registered account found with this email. Please check your spelling or visit the Barangay Hall.';
+      setErrorMessage(msg);
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Verifying Security Answers
+  const handleVerifyAnswers = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (!answer1.trim() || !answer2.trim()) {
+      setErrorMessage('Please answer both security questions before continuing.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await authApi.verifySecurityAnswers({
         email: email.trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        verificationKey: verificationKey.trim() || undefined,
+        answer1: answer1.trim(),
+        answer2: answer2.trim(),
       });
 
       setResetToken(res.data.resetToken);
       setResidentName(res.data.residentName);
-      toast.success('Identity verified! Please set your new password.');
+      toast.success('Security questions verified! You may now set your new password.');
       setStep(2);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Verification failed. Please check your information or visit the Barangay Hall.';
+        'The security answers you provided do not match our records. Please check your spelling and try again.';
       setErrorMessage(msg);
       toast.error(msg);
     } finally {
@@ -109,7 +141,7 @@ export default function ForgotPasswordPage() {
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Failed to reset password. Your reset session may have expired.';
+        'Failed to reset password. Your reset session may have expired. Please verify again.';
       setErrorMessage(msg);
       toast.error(msg);
     } finally {
@@ -136,7 +168,7 @@ export default function ForgotPasswordPage() {
           </Link>
           <h1 className="text-2xl font-extrabold text-white font-display">Account Recovery</h1>
           <p className="text-white/80 text-sm mt-1">
-            {step === 1 && 'Verify your resident details to recover your account'}
+            {step === 1 && 'Answer your security questions to verify identity and recover your account'}
             {step === 2 && 'Set a new secure password for your account'}
             {step === 3 && 'Account recovery complete'}
           </p>
@@ -157,7 +189,7 @@ export default function ForgotPasswordPage() {
                 {step > 1 ? <CheckCircle2 size={16} /> : '1'}
               </div>
               <span className={`text-xs font-medium ${step === 1 ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
-                Verification
+                Security Questions
               </span>
             </div>
 
@@ -204,102 +236,155 @@ export default function ForgotPasswordPage() {
             </div>
           )}
 
-          {/* ===== STEP 1: VERIFY IDENTITY ===== */}
+          {/* ===== STEP 1: SECURITY QUESTIONS VERIFICATION ===== */}
           {step === 1 && (
-            <form onSubmit={handleVerify} className="flex flex-col gap-4">
-              <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-100 flex items-start gap-3 text-xs text-blue-900 leading-relaxed">
-                <ShieldCheck size={18} className="text-[#1e3a8a] flex-shrink-0 mt-0.5" />
-                <span>
-                  To protect resident accounts, please provide your registered Barangay 442 account credentials.
-                </span>
-              </div>
+            <div>
+              {!questionsLoaded ? (
+                /* Sub-step 1A: Enter Email Address */
+                <form onSubmit={handleFetchQuestions} className="flex flex-col gap-4">
+                  <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-100 flex items-start gap-3 text-xs text-blue-900 leading-relaxed">
+                    <ShieldCheck size={18} className="text-[#1e3a8a] flex-shrink-0 mt-0.5" />
+                    <span>
+                      Enter your registered email address. We will retrieve your security questions (such as your mother's name or dog's name) to verify your account identity.
+                    </span>
+                  </div>
 
-              {/* Email */}
-              <div className="form-group">
-                <label className="form-label form-label-required">Registered Email Address</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="juan.delacruz@gmail.com"
-                  className="form-input"
-                  required
-                  autoFocus
-                />
-              </div>
+                  <div className="form-group">
+                    <label className="form-label form-label-required">Registered Email Address</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g. juan.delacruz@gmail.com"
+                      className="form-input"
+                      required
+                      autoFocus
+                    />
+                    <span className="text-[11px] text-gray-400 mt-1 block">
+                      The email address you used when registering your Barangay 442 account.
+                    </span>
+                  </div>
 
-              {/* Names */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="form-group">
-                  <label className="form-label form-label-required">First Name</label>
-                  <input
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Juan"
-                    className="form-input"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label form-label-required">Last Name</label>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Dela Cruz"
-                    className="form-input"
-                    required
-                  />
-                </div>
-              </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="btn btn-primary btn-lg w-full mt-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="spinner spinner-white w-4 h-4" />
+                        Finding Account...
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound size={18} />
+                        Continue to Security Questions
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                /* Sub-step 1B: Answer Security Questions */
+                <form onSubmit={handleVerifyAnswers} className="flex flex-col gap-4 animate-fade-in">
+                  {/* Verified Account Banner */}
+                  <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between gap-3 text-xs text-emerald-900">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                        <UserCheck size={18} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-gray-900">{residentName}</div>
+                        <div className="text-gray-500 text-[11px]">{email}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuestionsLoaded(false);
+                        setAnswer1('');
+                        setAnswer2('');
+                        setErrorMessage('');
+                      }}
+                      className="text-xs text-[#1e3a8a] hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <RotateCcw size={12} />
+                      Change Email
+                    </button>
+                  </div>
 
-              {/* Birthdate or Contact (Extra Verification) */}
-              <div className="form-group">
-                <div className="flex items-center justify-between">
-                  <label className="form-label">
-                    Birthdate or Contact Number <span className="text-gray-400 font-normal">(Optional)</span>
-                  </label>
-                </div>
-                <input
-                  type="text"
-                  value={verificationKey}
-                  onChange={(e) => setVerificationKey(e.target.value)}
-                  placeholder="e.g. 1985-05-15 or 09171234567"
-                  className="form-input"
-                />
-                <span className="text-[11px] text-gray-400 mt-1 block">
-                  Match your profile's birthdate (YYYY-MM-DD) or mobile number if recorded.
-                </span>
-              </div>
+                  <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 flex items-start gap-2 text-xs text-blue-900 leading-relaxed">
+                    <HelpCircle size={16} className="text-[#1e3a8a] flex-shrink-0 mt-0.5" />
+                    <span>Please answer the security questions below to verify you are the account owner:</span>
+                  </div>
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="btn btn-primary btn-lg w-full mt-2"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="spinner spinner-white w-4 h-4" />
-                    Verifying Identity...
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={18} />
-                    Verify Resident Account
-                  </>
-                )}
-              </button>
-            </form>
+                  {/* Question 1: Mother's Name / Custom */}
+                  <div className="form-group bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                    <label className="form-label form-label-required text-xs flex items-center gap-1.5 font-semibold text-gray-900">
+                      <Heart size={14} className="text-pink-500 flex-shrink-0" />
+                      <span>{question1}</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={answer1}
+                      onChange={(e) => setAnswer1(e.target.value)}
+                      placeholder="Enter your answer (e.g. your mother's name)"
+                      className="form-input bg-white mt-1.5 text-sm"
+                      required
+                      autoFocus
+                    />
+                    <span className="text-[11px] text-gray-400 mt-1 block">
+                      Case-insensitive. Enter your mother's name as registered.
+                    </span>
+                  </div>
+
+                  {/* Question 2: Dog's Name / Custom */}
+                  <div className="form-group bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                    <label className="form-label form-label-required text-xs flex items-center gap-1.5 font-semibold text-gray-900">
+                      <Dog size={14} className="text-amber-500 flex-shrink-0" />
+                      <span>{question2}</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={answer2}
+                      onChange={(e) => setAnswer2(e.target.value)}
+                      placeholder="Enter your answer (e.g. your dog or pet's name)"
+                      className="form-input bg-white mt-1.5 text-sm"
+                      required
+                    />
+                    <span className="text-[11px] text-gray-400 mt-1 block">
+                      Case-insensitive. Enter your pet or dog's name as registered.
+                    </span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || !answer1.trim() || !answer2.trim()}
+                    className="btn btn-primary btn-lg w-full mt-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="spinner spinner-white w-4 h-4" />
+                        Verifying Answers...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={18} />
+                        Verify & Reset Password
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
           )}
 
           {/* ===== STEP 2: SET NEW PASSWORD ===== */}
           {step === 2 && (
-            <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
+            <form onSubmit={handleResetPassword} className="flex flex-col gap-4 animate-fade-in">
               <div className="p-3.5 bg-green-50 rounded-xl border border-green-200 flex items-center gap-3 text-xs text-green-800">
                 <CheckCircle2 size={18} className="text-green-600 flex-shrink-0" />
                 <div>
-                  <div className="font-bold">Identity Verified!</div>
+                  <div className="font-bold text-green-900">Security Questions Verified!</div>
                   <div>Account belongs to: <span className="font-semibold text-gray-900">{residentName}</span></div>
                 </div>
               </div>
@@ -370,6 +455,11 @@ export default function ForgotPasswordPage() {
                     {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <span className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> Passwords do not match
+                  </span>
+                )}
               </div>
 
               <button
@@ -394,7 +484,7 @@ export default function ForgotPasswordPage() {
 
           {/* ===== STEP 3: SUCCESS ===== */}
           {step === 3 && (
-            <div className="text-center py-4 flex flex-col items-center">
+            <div className="text-center py-4 flex flex-col items-center animate-fade-in">
               <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-4 shadow-sm">
                 <CheckCircle2 size={36} />
               </div>
@@ -440,4 +530,3 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
-

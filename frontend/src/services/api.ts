@@ -46,12 +46,35 @@ api.interceptors.response.use(
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }),
-  register: (data: { email: string; password: string; firstName: string; lastName: string }) =>
-    api.post<AuthResponse>('/auth/register', data),
+  register: (data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    securityQuestion1?: string;
+    securityAnswer1?: string;
+    securityQuestion2?: string;
+    securityAnswer2?: string;
+  }) => api.post<AuthResponse>('/auth/register', data),
   refresh: () => api.post<AuthResponse>('/auth/refresh'),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
-  verifyResident: (data: { email: string; firstName: string; lastName: string; verificationKey?: string }) =>
+  getSecurityQuestions: (email: string) =>
+    api.post<{
+      success: boolean;
+      email: string;
+      residentName: string;
+      question1: string;
+      question2: string;
+    }>('/auth/get-security-questions', { email }),
+  verifySecurityAnswers: (data: { email: string; answer1: string; answer2: string }) =>
+    api.post<{
+      success: boolean;
+      resetToken: string;
+      residentName: string;
+      message: string;
+    }>('/auth/verify-security-answers', data),
+  verifyResident: (data: { email: string; firstName: string; lastName: string }) =>
     api.post<{ success: boolean; resetToken: string; residentName: string; message: string }>('/auth/verify-resident', data),
   resetPassword: (data: { resetToken: string; newPassword: string }) =>
     api.post<{ success: boolean; message: string }>('/auth/reset-password', data),

@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, UserPlus, Building2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, Building2, CheckCircle, AlertCircle, ShieldAlert, Heart, Dog } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { authApi } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const registerSchema = z.object({
@@ -16,6 +17,10 @@ const registerSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
   confirmPassword: z.string(),
+  securityQuestion1: z.string().min(1, 'Please select security question 1'),
+  securityAnswer1: z.string().min(2, 'Please provide an answer (min 2 characters)'),
+  securityQuestion2: z.string().min(1, 'Please select security question 2'),
+  securityAnswer2: z.string().min(2, 'Please provide an answer (min 2 characters)'),
   agreeToPrivacy: z.boolean().refine(val => val, 'You must agree to the Data Privacy Policy in accordance with R.A. 10173'),
 }).refine(data => data.password === data.confirmPassword, {
   message: 'Passwords do not match',
@@ -39,6 +44,10 @@ export default function RegisterPage() {
     formState: { errors },
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
+    defaultValues: {
+      securityQuestion1: "What is your mother's name?",
+      securityQuestion2: "What is your dog's name?",
+    },
   });
 
   const password = watch('password', '');
@@ -51,15 +60,15 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true);
     try {
-      // Import authApi here or at the top. Let's just use fetch or import authApi.
-      // Wait, we need to import authApi.
-      // I will do that in the next tool call if needed, or I can just write it here.
-      const { authApi } = await import('../../services/api');
       const res = await authApi.register({
         email: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
+        securityQuestion1: data.securityQuestion1,
+        securityAnswer1: data.securityAnswer1,
+        securityQuestion2: data.securityQuestion2,
+        securityAnswer2: data.securityAnswer2,
       });
       // Set token to local storage
       localStorage.setItem('masid_token', res.data.accessToken);
@@ -199,6 +208,82 @@ export default function RegisterPage() {
                 </button>
               </div>
               {errors.confirmPassword && <span className="form-error"><AlertCircle size={12} />{errors.confirmPassword.message}</span>}
+            </div>
+
+            {/* Password Recovery Questions Section */}
+            <div className="p-4 bg-blue-50/50 border border-blue-200/80 rounded-2xl flex flex-col gap-3.5 my-1">
+              <div className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#1e3a8a] text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                  <ShieldAlert size={15} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 leading-tight">Password Recovery Questions</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Answer these questions to recover and reset your password if you ever forget it.
+                  </p>
+                </div>
+              </div>
+
+              {/* Question 1: Mother's Name */}
+              <div className="form-group bg-white p-3 rounded-xl border border-blue-100 shadow-xs">
+                <label htmlFor="reg-q1" className="form-label form-label-required text-xs flex items-center gap-1.5 font-semibold text-gray-900">
+                  <Heart size={13} className="text-pink-500 flex-shrink-0" />
+                  Password Recovery Question 1
+                </label>
+                <select
+                  id="reg-q1"
+                  {...register('securityQuestion1')}
+                  className="form-input text-xs py-2 bg-gray-50 border-gray-200"
+                >
+                  <option value="What is your mother's name?">What is your mother's name?</option>
+                  <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+                  <option value="What city or municipality were you born in?">What city or municipality were you born in?</option>
+                  <option value="What was the name of your first elementary school?">What was the name of your first elementary school?</option>
+                </select>
+                <input
+                  id="reg-a1"
+                  type="text"
+                  {...register('securityAnswer1')}
+                  className={`form-input text-xs mt-2 bg-white ${errors.securityAnswer1 ? 'form-input-error' : ''}`}
+                  placeholder="Enter your mother's name (e.g. Maria / Santos)"
+                />
+                {errors.securityAnswer1 && (
+                  <span className="form-error text-[11px] mt-1"><AlertCircle size={11} />{errors.securityAnswer1.message}</span>
+                )}
+              </div>
+
+              {/* Question 2: Dog's Name */}
+              <div className="form-group bg-white p-3 rounded-xl border border-blue-100 shadow-xs">
+                <label htmlFor="reg-q2" className="form-label form-label-required text-xs flex items-center gap-1.5 font-semibold text-gray-900">
+                  <Dog size={13} className="text-amber-500 flex-shrink-0" />
+                  Password Recovery Question 2
+                </label>
+                <select
+                  id="reg-q2"
+                  {...register('securityQuestion2')}
+                  className="form-input text-xs py-2 bg-gray-50 border-gray-200"
+                >
+                  <option value="What is your dog's name?">What is your dog's name?</option>
+                  <option value="What is your pet or dog's name?">What is your pet or dog's name?</option>
+                  <option value="What is your favorite childhood nickname?">What is your favorite childhood nickname?</option>
+                  <option value="What is your favorite Filipino dish?">What is your favorite Filipino dish?</option>
+                </select>
+                <input
+                  id="reg-a2"
+                  type="text"
+                  {...register('securityAnswer2')}
+                  className={`form-input text-xs mt-2 bg-white ${errors.securityAnswer2 ? 'form-input-error' : ''}`}
+                  placeholder="Enter your dog or pet's name (e.g. Brownie / Bantay)"
+                />
+                {errors.securityAnswer2 && (
+                  <span className="form-error text-[11px] mt-1"><AlertCircle size={11} />{errors.securityAnswer2.message}</span>
+                )}
+              </div>
+
+              <div className="text-[11px] text-gray-500 bg-white/70 p-2 rounded-lg border border-gray-100 flex items-center gap-1.5">
+                <CheckCircle size={12} className="text-green-600 flex-shrink-0" />
+                <span>You will answer these same questions when resetting your password.</span>
+              </div>
             </div>
 
             {/* Data Privacy Agreement (R.A. 10173) */}

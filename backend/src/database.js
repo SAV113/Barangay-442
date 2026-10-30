@@ -29,6 +29,10 @@ function initializeDatabase() {
       role TEXT NOT NULL DEFAULT 'resident' CHECK(role IN ('admin','staff','resident')),
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','inactive','suspended')),
       profile_photo TEXT,
+      security_question_1 TEXT DEFAULT 'What is your mother''s maiden name?',
+      security_answer_1 TEXT,
+      security_question_2 TEXT DEFAULT 'What is your pet or dog''s name?',
+      security_answer_2 TEXT,
       last_login_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -217,6 +221,52 @@ function initializeDatabase() {
     );
   `);
 
+  // Safely alter existing database tables if security columns don't exist yet
+  try { db.exec("ALTER TABLE users ADD COLUMN security_question_1 TEXT DEFAULT 'What is your mother''s maiden name?'"); } catch (e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN security_answer_1 TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN security_question_2 TEXT DEFAULT 'What is your pet or dog''s name?'"); } catch (e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN security_answer_2 TEXT"); } catch (e) {}
+
+  // Backfill existing seed/demo users with default security questions and answers
+  try {
+    db.exec(`
+      UPDATE users SET
+        security_question_1 = COALESCE(security_question_1, 'What is your mother''s maiden name?'),
+        security_answer_1 = COALESCE(security_answer_1, 'Buenaventura'),
+        security_question_2 = COALESCE(security_question_2, 'What is your pet or dog''s name?'),
+        security_answer_2 = COALESCE(security_answer_2, 'Brownie')
+      WHERE email = 'juan.delacruz@gmail.com' AND (security_answer_1 IS NULL OR security_answer_2 IS NULL);
+
+      UPDATE users SET
+        security_question_1 = COALESCE(security_question_1, 'What is your mother''s maiden name?'),
+        security_answer_1 = COALESCE(security_answer_1, 'Reyes'),
+        security_question_2 = COALESCE(security_question_2, 'What is your pet or dog''s name?'),
+        security_answer_2 = COALESCE(security_answer_2, 'Luna')
+      WHERE email = 'maria.garcia@gmail.com' AND (security_answer_1 IS NULL OR security_answer_2 IS NULL);
+
+      UPDATE users SET
+        security_question_1 = COALESCE(security_question_1, 'What is your mother''s maiden name?'),
+        security_answer_1 = COALESCE(security_answer_1, 'Santos'),
+        security_question_2 = COALESCE(security_question_2, 'What is your pet or dog''s name?'),
+        security_answer_2 = COALESCE(security_answer_2, 'Max')
+      WHERE email = 'pedro.lim@gmail.com' AND (security_answer_1 IS NULL OR security_answer_2 IS NULL);
+
+      UPDATE users SET
+        security_question_1 = COALESCE(security_question_1, 'What is your mother''s maiden name?'),
+        security_answer_1 = COALESCE(security_answer_1, 'Reyes'),
+        security_question_2 = COALESCE(security_question_2, 'What is your pet or dog''s name?'),
+        security_answer_2 = COALESCE(security_answer_2, 'Buddy')
+      WHERE email = 'admin@masid.gov.ph' AND (security_answer_1 IS NULL OR security_answer_2 IS NULL);
+
+      UPDATE users SET
+        security_question_1 = COALESCE(security_question_1, 'What is your mother''s maiden name?'),
+        security_answer_1 = COALESCE(security_answer_1, 'Santos'),
+        security_question_2 = COALESCE(security_question_2, 'What is your pet or dog''s name?'),
+        security_answer_2 = COALESCE(security_answer_2, 'Bantay')
+      WHERE security_answer_1 IS NULL OR security_answer_2 IS NULL;
+    `);
+  } catch (e) {}
+
   console.log('[DB] Tables created successfully.');
 }
 
@@ -241,17 +291,17 @@ function seedDatabase() {
 
   // ---- Seed Users ----
   const insertUser = db.prepare(`
-    INSERT INTO users (email, password_hash, first_name, last_name, role, status)
-    VALUES (?, ?, ?, ?, ?, 'active')
+    INSERT INTO users (email, password_hash, first_name, last_name, role, status, security_question_1, security_answer_1, security_question_2, security_answer_2)
+    VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
   `);
 
   const seedUsers = db.transaction(() => {
-    insertUser.run(ADMIN_EMAIL, adminHash, 'Maria', 'Santos', 'admin');
-    insertUser.run(STAFF_EMAIL, staffHash, 'Jose', 'Reyes', 'staff');
-    insertUser.run('staff2@masid.gov.ph', staffHash, 'Ana', 'Cruz', 'staff');
-    insertUser.run('juan.delacruz@gmail.com', residentHash, 'Juan', 'Dela Cruz', 'resident');
-    insertUser.run('maria.garcia@gmail.com', residentHash, 'Maria', 'Garcia', 'resident');
-    insertUser.run('pedro.lim@gmail.com', residentHash, 'Pedro', 'Lim', 'resident');
+    insertUser.run(ADMIN_EMAIL, adminHash, 'Maria', 'Santos', 'admin', "What is your mother's maiden name?", 'Reyes', "What is your pet or dog's name?", 'Buddy');
+    insertUser.run(STAFF_EMAIL, staffHash, 'Jose', 'Reyes', 'staff', "What is your mother's maiden name?", 'Santos', "What is your pet or dog's name?", 'Bantay');
+    insertUser.run('staff2@masid.gov.ph', staffHash, 'Ana', 'Cruz', 'staff', "What is your mother's maiden name?", 'Morales', "What is your pet or dog's name?", 'Choco');
+    insertUser.run('juan.delacruz@gmail.com', residentHash, 'Juan', 'Dela Cruz', 'resident', "What is your mother's maiden name?", 'Buenaventura', "What is your pet or dog's name?", 'Brownie');
+    insertUser.run('maria.garcia@gmail.com', residentHash, 'Maria', 'Garcia', 'resident', "What is your mother's maiden name?", 'Reyes', "What is your pet or dog's name?", 'Luna');
+    insertUser.run('pedro.lim@gmail.com', residentHash, 'Pedro', 'Lim', 'resident', "What is your mother's maiden name?", 'Santos', "What is your pet or dog's name?", 'Max');
   });
   seedUsers();
   console.log('[DB] Users seeded.');

@@ -37,6 +37,10 @@ export interface RegisterPayload {
   password: string;
   firstName: string;
   lastName: string;
+  securityQuestion1?: string;
+  securityAnswer1?: string;
+  securityQuestion2?: string;
+  securityAnswer2?: string;
 }
 
 export interface AuthResponse {

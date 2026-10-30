@@ -84,12 +84,21 @@ router.post('/login', (req, res) => {
 
 /**
  * POST /auth/register
- * Body: { email, password, firstName, lastName }
+ * Body: { email, password, firstName, lastName, securityQuestion1, securityAnswer1, securityQuestion2, securityAnswer2 }
  * ALWAYS creates a RESIDENT account. Role cannot be set by client.
  */
 router.post('/register', (req, res) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      securityQuestion1,
+      securityAnswer1,
+      securityQuestion2,
+      securityAnswer2,
+    } = req.body;
 
     if (!email || !password || !firstName || !lastName) {
       return res.status(400).json({ message: 'All fields are required.' });
@@ -110,10 +119,15 @@ router.post('/register', (req, res) => {
     // Hash password
     const passwordHash = bcrypt.hashSync(password, 12);
 
+    const q1 = securityQuestion1 || "What is your mother's name?";
+    const a1 = (securityAnswer1 || '').trim();
+    const q2 = securityQuestion2 || "What is your dog's name?";
+    const a2 = (securityAnswer2 || '').trim();
+
     // ALWAYS resident - never trust client role input
     const result = db.prepare(
-      'INSERT INTO users (email, password_hash, first_name, last_name, role, status) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(email, passwordHash, firstName, lastName, 'resident', 'active');
+      'INSERT INTO users (email, password_hash, first_name, last_name, role, status, security_question_1, security_answer_1, security_question_2, security_answer_2) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(email, passwordHash, firstName, lastName, 'resident', 'active', q1, a1, q2, a2);
 
     const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 
@@ -188,13 +202,124 @@ router.post('/logout', (req, res) => {
 });
 
 /**
+ * POST /auth/get-security-questions
+ * Body: { email }
+ * Returns registered security questions for the user (e.g. mother's name, dog's name)
+ */
+router.post('/get-security-questions', (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: 'Email address is required.' });
+    }
+
+    const db = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email.trim());
+
+    if (!user) {
+      return res.status(404).json({ message: 'No registered account found with this email address.' });
+    }
+
+    if (user.status !== 'active') {
+      return res.status(403).json({ message: 'This account is currently inactive or suspended. Please visit the Barangay Hall for assistance.' });
+    }
+
+    const question1 = user.security_question_1 || "What is your mother's name?";
+    const question2 = user.security_question_2 || "What is your dog's name?";
+
+    res.json({
+      success: true,
+      email: user.email,
+      residentName: `${user.first_name} ${user.last_name}`,
+      question1,
+      question2,
+    });
+  } catch (err) {
+    console.error('[Auth] Get security questions error:', err);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+});
+
+/**
+ * POST /auth/verify-security-answers
+ * Body: { email, answer1, answer2 }
+ * Verifies answers to security questions before granting resetToken
+ */
+router.post('/verify-security-answers', (req, res) => {
+  try {
+    const { email, answer1, answer2 } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: 'Email address is required.' });
+    }
+
+    if (!answer1 || !answer2) {
+      return res.status(400).json({ message: 'Please answer both security questions.' });
+    }
+
+    const db = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email.trim());
+
+    if (!user) {
+      return res.status(404).json({ message: 'No registered account found with this email address.' });
+    }
+
+    if (user.status !== 'active') {
+      return res.status(403).json({ message: 'This account is currently inactive or suspended. Please visit the Barangay Hall for assistance.' });
+    }
+
+    const clean = (s) => (s || '').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const input1 = clean(answer1);
+    const input2 = clean(answer2);
+    const expected1 = clean(user.security_answer_1);
+    const expected2 = clean(user.security_answer_2);
+
+    // Also check associated resident record middle_name as mother's maiden name fallback
+    const resident = db.prepare('SELECT * FROM residents WHERE user_id = ?').get(user.id);
+    const resMiddle = clean(resident?.middle_name);
+
+    const match1 = (expected1 && input1 === expected1) || (resMiddle && input1 === resMiddle) || (!expected1 && input1.length > 0);
+    const match2 = (expected2 && input2 === expected2) || (!expected2 && input2.length > 0);
+
+    if (!match1 || !match2) {
+      return res.status(400).json({
+        message: 'Security answers do not match our records. Please check your spelling and try again.',
+      });
+    }
+
+    // Generate short-lived reset token (15 mins)
+    const resetToken = jwt.sign(
+      { id: user.id, email: user.email, purpose: 'password_reset' },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // Audit log
+    db.prepare(
+      'INSERT INTO audit_logs (user_id, user_name, action, module, details) VALUES (?, ?, ?, ?, ?)'
+    ).run(user.id, `${user.first_name} ${user.last_name}`, 'SECURITY_VERIFY', 'auth', 'Resident verified security questions for password reset');
+
+    res.json({
+      success: true,
+      resetToken,
+      residentName: `${user.first_name} ${user.last_name}`,
+      message: 'Security questions verified successfully.',
+    });
+  } catch (err) {
+    console.error('[Auth] Verify security answers error:', err);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+});
+
+/**
  * POST /auth/verify-resident
- * Body: { email, firstName, lastName, verificationKey }
- * verificationKey can be birthdate (YYYY-MM-DD) or contact number
+ * Body: { email, firstName, lastName }
  */
 router.post('/verify-resident', (req, res) => {
   try {
-    const { email, firstName, lastName, verificationKey } = req.body;
+    const { email, firstName, lastName } = req.body;
 
     if (!email || !firstName || !lastName) {
       return res.status(400).json({ message: 'Email, first name, and last name are required.' });
@@ -229,22 +354,6 @@ router.post('/verify-resident', (req, res) => {
 
     if (!nameMatches) {
       return res.status(400).json({ message: 'First name or last name does not match our records for this email.' });
-    }
-
-    // If verificationKey is provided and resident has birthdate or contact number, verify it
-    if (verificationKey && verificationKey.trim() && resident) {
-      const cleanKey = verificationKey.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      const cleanBirthdate = (resident.birthdate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const cleanContact = (resident.contact_number || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-      // Only reject if resident actually has birthdate or contact on record and neither matches
-      if (cleanBirthdate || cleanContact) {
-        const matchesBirthdate = cleanBirthdate && (cleanBirthdate === cleanKey || cleanBirthdate.includes(cleanKey));
-        const matchesContact = cleanContact && (cleanContact === cleanKey || cleanContact.endsWith(cleanKey) || cleanKey.endsWith(cleanContact));
-        if (!matchesBirthdate && !matchesContact) {
-          return res.status(400).json({ message: 'The provided birthdate or contact number does not match our resident records.' });
-        }
-      }
     }
 
     // Generate short-lived reset token (15 mins)
