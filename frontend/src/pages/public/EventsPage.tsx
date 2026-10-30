@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
@@ -23,7 +24,7 @@ export default function EventsPage() {
   useEffect(() => {
     eventsApi.getPublished({ limit: 50 })
       .then(r => setEvents(r.data?.data ?? []))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
