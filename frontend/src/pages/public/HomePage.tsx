@@ -244,13 +244,13 @@ export default function HomePage() {
     // Try to load from API, fall back to demo data
     announcementsApi.getPublished({ limit: 3 })
       .then(r => { if (r.data?.data?.length) setAnnouncements(r.data.data); })
-      .catch(() => {});
+      .catch(() => { });
     eventsApi.getPublished({ limit: 3 })
       .then(r => { if (r.data?.data?.length) setEvents(r.data.data); })
-      .catch(() => {});
+      .catch(() => { });
     payoutSchedulesApi.getPublic({ limit: 2 })
       .then(r => { if (r.data?.data?.length) setPayouts(r.data.data); })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return (
@@ -582,13 +582,13 @@ export default function HomePage() {
                 What is MASID?
               </h2>
               <p className="text-gray-600 leading-relaxed mb-6 text-base">
-                <strong>MASID</strong> — Monitoring and Administration System for Integrated Delivery — is an 
-                integrated Barangay E-Services management platform developed specifically for 
+                <strong>MASID</strong> — Monitoring and Administration System for Integrated Delivery — is an
+                integrated Barangay E-Services management platform developed specifically for
                 <strong> Barangay 442, Sampaloc, Manila</strong>.
               </p>
               <p className="text-gray-600 leading-relaxed mb-8 text-base">
-                It centralizes payout management, beneficiary records, resource distribution, 
-                community events, and announcements — improving transparency, efficiency, and 
+                It centralizes payout management, beneficiary records, resource distribution,
+                community events, and announcements — improving transparency, efficiency, and
                 accessibility of barangay services for all residents.
               </p>
 
