@@ -240,7 +240,7 @@ export default function HomePage() {
   const [events, setEvents] = useState<BarangayEvent[]>(DEMO_EVENTS);
   const [payouts, setPayouts] = useState<PayoutSchedule[]>(DEMO_PAYOUTS);
   const [stats, setStats] = useState({
-    beneficiaries: 250,
+    beneficiaries: 10,
     programs: 5,
     events: 6,
   });
@@ -257,7 +257,7 @@ export default function HomePage() {
       .then(r => { if (r.data?.data?.length) setPayouts(r.data.data); })
       .catch(() => { });
 
-    // Fetch database stats for beneficiaries (baseline 250 + new signups)
+    // Fetch database stats for beneficiaries matching the system's live count
     dashboardApi.getPublicStats()
       .then(r => {
         if (r.data && typeof r.data.beneficiaries === 'number') {
@@ -272,7 +272,7 @@ export default function HomePage() {
         // Fallback: check if local signups occurred
         const localSignups = parseInt(localStorage.getItem('masid_local_signup_count') || '0', 10);
         if (localSignups > 0) {
-          setStats(prev => ({ ...prev, beneficiaries: 250 + localSignups }));
+          setStats(prev => ({ ...prev, beneficiaries: 10 + localSignups }));
         }
       });
   }, []);
