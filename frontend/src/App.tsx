@@ -23,6 +23,7 @@ const ContactPage = lazy(() => import('./pages/public/ContactPage'));
 // Auth
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
 
 // Admin
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -122,6 +123,14 @@ export default function App() {
               element={
                 <PublicOnlyRoute>
                   <RegisterPage />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicOnlyRoute>
+                  <ForgotPasswordPage />
                 </PublicOnlyRoute>
               }
             />

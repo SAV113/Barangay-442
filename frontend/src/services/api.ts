@@ -51,6 +51,10 @@ export const authApi = {
   refresh: () => api.post<AuthResponse>('/auth/refresh'),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
+  verifyResident: (data: { email: string; firstName: string; lastName: string; verificationKey?: string }) =>
+    api.post<{ success: boolean; resetToken: string; residentName: string; message: string }>('/auth/verify-resident', data),
+  resetPassword: (data: { resetToken: string; newPassword: string }) =>
+    api.post<{ success: boolean; message: string }>('/auth/reset-password', data),
 };
 
 // ---- Beneficiaries ----
