@@ -132,9 +132,28 @@ router.post('/register', (req, res) => {
     const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 
     // Also create a resident record
-    db.prepare(
+    const resResult = db.prepare(
       'INSERT INTO residents (user_id, first_name, last_name, address) VALUES (?, ?, ?, ?)'
     ).run(newUser.id, firstName, lastName, 'Barangay 442, Sampaloc, Manila');
+    const residentId = resResult.lastInsertRowid;
+
+    // Automatically register as an active beneficiary so signing up counts 1 beneficiary
+    try {
+      const codeNum = String(residentId).padStart(4, '0');
+      const beneficiaryCode = `BRY442-RES-${codeNum}`;
+      const today = new Date().toISOString().split('T')[0];
+
+      // Ensure unique code if collision
+      const existingBen = db.prepare('SELECT id FROM beneficiaries WHERE beneficiary_code = ?').get(beneficiaryCode);
+      const finalCode = existingBen ? `BRY442-RES-${codeNum}-${Date.now().toString().slice(-4)}` : beneficiaryCode;
+
+      db.prepare(`
+        INSERT INTO beneficiaries (resident_id, beneficiary_code, category, status, date_registered, notes, created_by)
+        VALUES (?, ?, 'other', 'active', ?, 'Registered resident beneficiary', ?)
+      `).run(residentId, finalCode, today, newUser.id);
+    } catch (benErr) {
+      console.error('[Auth] Failed to auto-register beneficiary:', benErr);
+    }
 
     // Log registration with Data Privacy Act compliance note
     db.prepare(

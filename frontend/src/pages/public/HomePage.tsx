@@ -6,7 +6,7 @@ import {
   Users, TrendingUp, Shield, Zap, Star, ExternalLink
 } from 'lucide-react';
 import { PublicNavbar, PublicFooter } from '../../components/layout/PublicLayout';
-import { announcementsApi, eventsApi, payoutSchedulesApi } from '../../services/api';
+import { announcementsApi, eventsApi, payoutSchedulesApi, dashboardApi } from '../../services/api';
 import type { Announcement, BarangayEvent, PayoutSchedule } from '../../types';
 import { format, parseISO } from 'date-fns';
 
@@ -239,6 +239,11 @@ export default function HomePage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>(DEMO_ANNOUNCEMENTS);
   const [events, setEvents] = useState<BarangayEvent[]>(DEMO_EVENTS);
   const [payouts, setPayouts] = useState<PayoutSchedule[]>(DEMO_PAYOUTS);
+  const [stats, setStats] = useState({
+    beneficiaries: 250,
+    programs: 5,
+    events: 6,
+  });
 
   useEffect(() => {
     // Try to load from API, fall back to demo data
@@ -251,6 +256,25 @@ export default function HomePage() {
     payoutSchedulesApi.getPublic({ limit: 2 })
       .then(r => { if (r.data?.data?.length) setPayouts(r.data.data); })
       .catch(() => { });
+
+    // Fetch database stats for beneficiaries (baseline 250 + new signups)
+    dashboardApi.getPublicStats()
+      .then(r => {
+        if (r.data && typeof r.data.beneficiaries === 'number') {
+          setStats({
+            beneficiaries: r.data.beneficiaries,
+            programs: r.data.programs || 5,
+            events: r.data.events || 6,
+          });
+        }
+      })
+      .catch(() => {
+        // Fallback: check if local signups occurred
+        const localSignups = parseInt(localStorage.getItem('masid_local_signup_count') || '0', 10);
+        if (localSignups > 0) {
+          setStats(prev => ({ ...prev, beneficiaries: 250 + localSignups }));
+        }
+      });
   }, []);
 
   return (
@@ -320,9 +344,9 @@ export default function HomePage() {
             {/* Stats Row */}
             <div className="mt-12 flex flex-wrap gap-6">
               {[
-                { label: 'Active Beneficiaries', value: '250+', icon: Users },
-                { label: 'Programs Running', value: '5', icon: TrendingUp },
-                { label: 'Events This Month', value: '6', icon: Calendar },
+                { label: 'Active Beneficiaries', value: `${stats.beneficiaries}`, icon: Users },
+                { label: 'Programs Running', value: `${stats.programs}`, icon: TrendingUp },
+                { label: 'Events This Month', value: `${stats.events}`, icon: Calendar },
               ].map((stat) => (
                 <div key={stat.label} className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">

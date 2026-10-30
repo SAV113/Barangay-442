@@ -169,6 +169,8 @@ export const eventsApi = {
 export const dashboardApi = {
   getStats: () => api.get('/dashboard/stats'),
   getCharts: () => api.get('/dashboard/charts'),
+  getPublicStats: () =>
+    api.get<{ beneficiaries: number; programs: number; events: number }>('/dashboard/public-stats'),
 };
 
 // ---- Reports ----

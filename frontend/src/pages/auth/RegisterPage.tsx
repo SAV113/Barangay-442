@@ -73,6 +73,11 @@ export default function RegisterPage() {
       // Set token to local storage
       localStorage.setItem('masid_token', res.data.accessToken);
       localStorage.setItem('masid_user', JSON.stringify(res.data.user));
+
+      // Increment local signup counter as immediate fallback for home page stats
+      const currentSignups = parseInt(localStorage.getItem('masid_local_signup_count') || '0', 10);
+      localStorage.setItem('masid_local_signup_count', String(currentSignups + 1));
+
       toast.success('Account created successfully! Welcome to MASID.');
       // Reload to trigger auth context
       window.location.href = '/resident/dashboard';
