@@ -105,6 +105,8 @@ export const payoutProgramsApi = {
   create: (data: unknown) => api.post('/payout-programs', data),
   update: (id: number, data: unknown) => api.patch(`/payout-programs/${id}`, data),
   delete: (id: number) => api.delete(`/payout-programs/${id}`),
+  archive: (id: number) => api.patch(`/payout-programs/${id}/archive`),
+  restore: (id: number) => api.patch(`/payout-programs/${id}/restore`),
 };
 
 // ---- Payout Schedules ----
@@ -133,6 +135,7 @@ export const resourcesApi = {
   create: (data: unknown) => api.post('/resources', data),
   update: (id: number, data: unknown) => api.patch(`/resources/${id}`, data),
   delete: (id: number) => api.delete(`/resources/${id}`),
+  getAlerts: () => api.get('/resources/alerts'),
 };
 
 // ---- Resource Distribution ----
@@ -140,6 +143,7 @@ export const distributionApi = {
   getAll: (params?: Record<string, unknown>) => api.get('/distributions', { params }),
   getById: (id: number) => api.get(`/distributions/${id}`),
   create: (data: unknown) => api.post('/distributions', data),
+  updateStatus: (id: number, data: unknown) => api.patch(`/distributions/${id}/status`, data),
 };
 
 // ---- Announcements ----
@@ -152,6 +156,7 @@ export const announcementsApi = {
   publish: (id: number) => api.patch(`/announcements/${id}/publish`),
   unpublish: (id: number) => api.patch(`/announcements/${id}/unpublish`),
   archive: (id: number) => api.patch(`/announcements/${id}/archive`),
+  republish: (id: number) => api.patch(`/announcements/${id}/republish`),
   delete: (id: number) => api.delete(`/announcements/${id}`),
 };
 
@@ -163,6 +168,8 @@ export const eventsApi = {
   create: (data: unknown) => api.post('/events', data),
   update: (id: number, data: unknown) => api.patch(`/events/${id}`, data),
   delete: (id: number) => api.delete(`/events/${id}`),
+  archive: (id: number) => api.patch(`/events/${id}/archive`),
+  restore: (id: number) => api.patch(`/events/${id}/restore`),
 };
 
 // ---- Dashboard ----

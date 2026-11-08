@@ -227,6 +227,41 @@ function initializeDatabase() {
   try { db.exec("ALTER TABLE users ADD COLUMN security_question_2 TEXT DEFAULT 'What is your pet or dog''s name?'"); } catch (e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN security_answer_2 TEXT"); } catch (e) {}
 
+  // ---- Enhancement Migrations ----
+  // Item 4: Soft delete for events and payout_programs
+  try { db.exec("ALTER TABLE events ADD COLUMN deleted_at TEXT DEFAULT NULL"); } catch (e) {}
+  try { db.exec("ALTER TABLE payout_programs ADD COLUMN deleted_at TEXT DEFAULT NULL"); } catch (e) {}
+
+  // Item 5: Resource distribution status tracking
+  try { db.exec("ALTER TABLE resource_distributions ADD COLUMN status TEXT DEFAULT 'completed' CHECK(status IN ('pending','ongoing','partially_distributed','fully_distributed','cancelled','completed'))"); } catch (e) {}
+  try { db.exec("ALTER TABLE resource_distributions ADD COLUMN allocated_quantity INTEGER DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE resource_distributions ADD COLUMN received_quantity INTEGER DEFAULT 0"); } catch (e) {}
+
+  // Item 7: Announcements expiration date for quarterly auto-unpublishing
+  try { db.exec("ALTER TABLE announcements ADD COLUMN expiration_date TEXT DEFAULT NULL"); } catch (e) {}
+  try { db.exec("ALTER TABLE announcements ADD COLUMN expired_at TEXT DEFAULT NULL"); } catch (e) {}
+
+  // Item 6: Low-stock notification tracking (avoid duplicates)
+  try { db.exec("ALTER TABLE resources ADD COLUMN low_stock_notified INTEGER DEFAULT 0"); } catch (e) {}
+
+  // Backfill: set expiration_date for existing published announcements (3 months from published_at)
+  try {
+    db.exec(`
+      UPDATE announcements
+      SET expiration_date = datetime(published_at, '+3 months')
+      WHERE status = 'published' AND published_at IS NOT NULL AND expiration_date IS NULL
+    `);
+  } catch (e) {}
+
+  // Backfill: set distribution status for existing records
+  try {
+    db.exec(`
+      UPDATE resource_distributions
+      SET allocated_quantity = quantity, received_quantity = quantity, status = 'completed'
+      WHERE status IS NULL OR allocated_quantity = 0
+    `);
+  } catch (e) {}
+
   // Backfill existing seed/demo users with default security questions and answers
   try {
     db.exec(`

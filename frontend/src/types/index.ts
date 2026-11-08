@@ -193,6 +193,8 @@ export interface Announcement {
   author?: User;
   status: ContentStatus;
   publishedAt?: string;
+  expirationDate?: string;
+  expiredAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -215,6 +217,7 @@ export interface BarangayEvent {
   maxParticipants?: number;
   createdBy?: number;
   creator?: User;
+  deletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

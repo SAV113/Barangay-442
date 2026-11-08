@@ -9,6 +9,7 @@ interface DistRecord {
   id: number; resourceId: number; beneficiaryId?: number; recipientName?: string;
   quantity: number; distributionDate: string; purpose?: string; notes?: string;
   distributedBy: number; createdAt: string;
+  status?: string; allocatedQuantity?: number; receivedQuantity?: number;
   resource?: { name: string; unit: string };
 }
 interface ResOption { id: number; name: string; quantity: number; unit: string; }
@@ -131,19 +132,46 @@ export default function AdminDistribution() {
           ) : (
             <div className="table-container">
               <table className="data-table">
-                <thead><tr><th>Resource</th><th>Recipient</th><th>Quantity</th><th>Date</th><th>Purpose</th></tr></thead>
+                <thead><tr><th>Resource</th><th>Recipient</th><th>Quantity</th><th>Status</th><th>Progress</th><th>Date</th><th>Purpose</th></tr></thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={5}><div className="empty-state"><div className="empty-state-icon"><Share2 size={28} /></div><p className="font-semibold text-gray-500">No distributions found</p></div></td></tr>
-                  ) : filtered.map(d => (
+                    <tr><td colSpan={7}><div className="empty-state"><div className="empty-state-icon"><Share2 size={28} /></div><p className="font-semibold text-gray-500">No distributions found</p></div></td></tr>
+                  ) : filtered.map(d => {
+                    const allocated = d.allocatedQuantity || d.quantity;
+                    const received = d.receivedQuantity || d.quantity;
+                    const pct = allocated > 0 ? Math.round((received / allocated) * 100) : 0;
+                    const statusLabel = (d.status || 'completed').replace(/_/g, ' ');
+                    const statusColor: Record<string, string> = {
+                      pending: 'badge-warning', ongoing: 'badge-info', partially_distributed: 'badge-secondary',
+                      fully_distributed: 'badge-success', cancelled: 'badge-error', completed: 'badge-success',
+                    };
+                    return (
                     <tr key={d.id}>
                       <td><span className="font-semibold text-sm text-gray-900">{d.resource?.name || `Resource #${d.resourceId}`}</span></td>
                       <td><p className="font-medium text-sm text-gray-900">{d.recipientName || '—'}</p></td>
-                      <td><span className="font-bold text-gray-900">{d.quantity}</span> <span className="text-gray-500 text-xs">{d.resource?.unit || ''}</span></td>
+                      <td>
+                        <div>
+                          <span className="font-bold text-gray-900">{d.quantity}</span> <span className="text-gray-500 text-xs">{d.resource?.unit || ''}</span>
+                          {allocated !== received && (
+                            <p className="text-xs text-gray-400">{received}/{allocated} received</p>
+                          )}
+                        </div>
+                      </td>
+                      <td><span className={`badge ${statusColor[d.status || 'completed'] || 'badge-gray'} capitalize text-xs`}>{statusLabel}</span></td>
+                      <td>
+                        <div className="w-20">
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : pct > 0 ? 'bg-blue-500' : 'bg-gray-300'}`}
+                              style={{ width: `${Math.min(100, pct)}%` }} />
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">{pct}%</p>
+                        </div>
+                      </td>
                       <td><span className="text-sm text-gray-600">{format(parseISO(d.distributionDate), 'MMM d, yyyy')}</span></td>
                       <td><p className="text-sm text-gray-500 max-w-[200px] truncate">{d.purpose || '—'}</p></td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -47,8 +47,14 @@ router.get('/stats', (req, res) => {
     const distributedThisMonth = db.prepare(
       "SELECT COUNT(*) as count FROM resource_distributions WHERE distribution_date >= date('now', 'start of month')"
     ).get().count;
-    const upcomingEvents = db.prepare("SELECT COUNT(*) as count FROM events WHERE status = 'published' AND event_date >= date('now')").get().count;
+    const upcomingEvents = db.prepare("SELECT COUNT(*) as count FROM events WHERE status = 'published' AND event_date >= date('now') AND deleted_at IS NULL").get().count;
     const publishedAnnouncements = db.prepare("SELECT COUNT(*) as count FROM announcements WHERE status = 'published'").get().count;
+    const archivedEvents = db.prepare("SELECT COUNT(*) as count FROM events WHERE deleted_at IS NOT NULL").get().count;
+    const archivedPrograms = db.prepare("SELECT COUNT(*) as count FROM payout_programs WHERE deleted_at IS NOT NULL").get().count;
+    const expiredAnnouncements = db.prepare("SELECT COUNT(*) as count FROM announcements WHERE status = 'archived' AND expired_at IS NOT NULL").get().count;
+
+    // Item 6: Low stock resource details for dashboard alerts
+    const lowStockResources = db.prepare("SELECT id, name, quantity, unit, low_stock_threshold, status FROM resources WHERE status IN ('low_stock', 'out_of_stock') ORDER BY quantity ASC").all();
 
     const payoutsByStatus = db.prepare(
       'SELECT status, COUNT(*) as count FROM payout_transactions GROUP BY status'
@@ -154,6 +160,13 @@ router.get('/stats', (req, res) => {
       resourcesByCategory,
       monthlyAssistance,
       recentAuditLogs,
+      archivedEvents,
+      archivedPrograms,
+      expiredAnnouncements,
+      lowStockResources: lowStockResources.map(r => ({
+        id: r.id, name: r.name, quantity: r.quantity, unit: r.unit,
+        lowStockThreshold: r.low_stock_threshold, status: r.status,
+      })),
     });
   } catch (err) {
     console.error('[Dashboard] Stats error:', err);

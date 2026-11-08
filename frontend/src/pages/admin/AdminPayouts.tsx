@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Wallet, Calendar, Clock, MapPin, ChevronRight, CheckCircle, AlertCircle, XCircle, X } from 'lucide-react';
+import { Plus, Search, Wallet, Calendar, Clock, MapPin, ChevronRight, CheckCircle, AlertCircle, XCircle, X, Filter, Archive, RotateCcw, ArrowUpDown } from 'lucide-react';
 import { AdminLayout } from '../../components/layout/AdminLayout';
 import { payoutProgramsApi, payoutSchedulesApi, payoutTransactionsApi } from '../../services/api';
 import { format, parseISO } from 'date-fns';
@@ -30,32 +30,74 @@ export default function AdminPayouts() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
 
+  // Item 2 & 3: Filter states
+  const [txStatusFilter, setTxStatusFilter] = useState('');
+  const [txScheduleFilter, setTxScheduleFilter] = useState('');
+  const [txDateFrom, setTxDateFrom] = useState('');
+  const [txDateTo, setTxDateTo] = useState('');
+  const [progStatusFilter, setProgStatusFilter] = useState('');
+  const [progCategoryFilter, setProgCategoryFilter] = useState('');
+  const [progSort, setProgSort] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+
   // Modal
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'program' | 'schedule' | 'transaction'>('program');
   const [formData, setFormData] = useState<any>({});
   const [saving, setSaving] = useState(false);
 
-  const fetchPrograms = async () => {
-    try { const res = await payoutProgramsApi.getAll({ limit: 100 }); setPrograms(res.data.data || res.data || []); }
-    catch (err: any) { toast.error('Failed to load programs'); }
-  };
+  // Pagination
+  const [txPage, setTxPage] = useState(1);
+  const [txTotal, setTxTotal] = useState(0);
+  const [txTotalPages, setTxTotalPages] = useState(1);
+
+  const fetchPrograms = useCallback(async () => {
+    try {
+      const params: Record<string, unknown> = { limit: 100 };
+      if (progStatusFilter) params.status = progStatusFilter;
+      if (progCategoryFilter) params.category = progCategoryFilter;
+      if (progSort) params.sort = progSort;
+      if (showArchived) params.includeArchived = 'true';
+      if (search && activeTab === 'programs') params.search = search;
+      const res = await payoutProgramsApi.getAll(params);
+      setPrograms(res.data.data || res.data || []);
+    } catch (err: any) { toast.error('Failed to load programs'); }
+  }, [progStatusFilter, progCategoryFilter, progSort, showArchived, search, activeTab]);
+
   const fetchSchedules = async () => {
     try { const res = await payoutSchedulesApi.getAll({ limit: 100 }); setSchedules(res.data.data || res.data || []); }
     catch (err: any) { toast.error('Failed to load schedules'); }
   };
-  const fetchTransactions = async () => {
-    try { const res = await payoutTransactionsApi.getAll({ limit: 100 }); setTransactions(res.data.data || res.data || []); }
-    catch (err: any) { toast.error('Failed to load transactions'); }
-  };
+
+  const fetchTransactions = useCallback(async () => {
+    try {
+      const params: Record<string, unknown> = { limit: 20, page: txPage };
+      if (txStatusFilter) params.status = txStatusFilter;
+      if (txScheduleFilter) params.scheduleId = txScheduleFilter;
+      if (txDateFrom) params.dateFrom = txDateFrom;
+      if (txDateTo) params.dateTo = txDateTo;
+      if (search && activeTab === 'transactions') params.search = search;
+      const res = await payoutTransactionsApi.getAll(params);
+      setTransactions(res.data.data || res.data || []);
+      setTxTotal(res.data.meta?.total || 0);
+      setTxTotalPages(res.data.meta?.totalPages || 1);
+    } catch (err: any) { toast.error('Failed to load transactions'); }
+  }, [txStatusFilter, txScheduleFilter, txDateFrom, txDateTo, search, activeTab, txPage]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([fetchPrograms(), fetchSchedules(), fetchTransactions()]);
     setLoading(false);
-  }, []);
+  }, [fetchPrograms, fetchTransactions]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const clearFilters = () => {
+    setSearch(''); setTxStatusFilter(''); setTxScheduleFilter('');
+    setTxDateFrom(''); setTxDateTo(''); setProgStatusFilter('');
+    setProgCategoryFilter(''); setProgSort(''); setShowArchived(false);
+    setTxPage(1);
+  };
 
   const openAddModal = () => {
     if (activeTab === 'programs') {
@@ -95,11 +137,26 @@ export default function AdminPayouts() {
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to update'); }
   };
 
+  // Item 4: Archive / Restore programs
+  const archiveProgram = async (id: number, name: string) => {
+    if (!confirm(`Archive "${name}"? It will be moved to the archived section.`)) return;
+    try { await payoutProgramsApi.archive(id); toast.success('Program archived'); fetchPrograms(); }
+    catch (err: any) { toast.error(err.response?.data?.message || 'Failed to archive'); }
+  };
+
+  const restoreProgram = async (id: number, name: string) => {
+    if (!confirm(`Restore "${name}" from archive?`)) return;
+    try { await payoutProgramsApi.restore(id); toast.success('Program restored'); fetchPrograms(); }
+    catch (err: any) { toast.error(err.response?.data?.message || 'Failed to restore'); }
+  };
+
   const deleteProgram = async (id: number) => {
-    if (!confirm('Delete this program?')) return;
+    if (!confirm('Permanently delete this program?')) return;
     try { await payoutProgramsApi.delete(id); toast.success('Deleted'); fetchPrograms(); }
     catch (err: any) { toast.error(err.response?.data?.message || 'Failed to delete'); }
   };
+
+  const hasActiveFilters = txStatusFilter || txScheduleFilter || txDateFrom || txDateTo || progStatusFilter || progCategoryFilter || progSort || showArchived;
 
   return (
     <AdminLayout>
@@ -121,10 +178,10 @@ export default function AdminPayouts() {
           {([
             { key: 'programs' as Tab, label: 'Programs', count: programs.length },
             { key: 'schedules' as Tab, label: 'Schedules', count: schedules.length },
-            { key: 'transactions' as Tab, label: 'Transactions', count: transactions.length },
+            { key: 'transactions' as Tab, label: 'Transactions', count: txTotal || transactions.length },
           ]).map(tab => (
             <button key={tab.key} id={`payout-tab-${tab.key}`}
-              onClick={() => { setActiveTab(tab.key); setSearch(''); }}
+              onClick={() => { setActiveTab(tab.key); setSearch(''); clearFilters(); }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab.key ? 'bg-white text-[#1e3a8a] shadow-sm font-semibold' : 'text-gray-500 hover:text-gray-700'
               }`}>
@@ -133,11 +190,83 @@ export default function AdminPayouts() {
           ))}
         </div>
 
-        {/* Search */}
+        {/* Filters */}
         <div className="card mb-5">
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input id="payout-search" type="search" placeholder={`Search ${activeTab}...`} value={search} onChange={e => setSearch(e.target.value)} className="form-input pl-9" />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input id="payout-search" type="search" placeholder={`Search ${activeTab}...`} value={search} onChange={e => setSearch(e.target.value)} className="form-input pl-9" />
+              </div>
+
+              {/* Item 2: Transaction filters */}
+              {activeTab === 'transactions' && (
+                <>
+                  <select value={txStatusFilter} onChange={e => { setTxStatusFilter(e.target.value); setTxPage(1); }} className="form-input w-full sm:w-36">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option><option value="claimed">Claimed</option>
+                    <option value="unclaimed">Unclaimed</option><option value="cancelled">Cancelled</option>
+                  </select>
+                  <select value={txScheduleFilter} onChange={e => { setTxScheduleFilter(e.target.value); setTxPage(1); }} className="form-input w-full sm:w-44">
+                    <option value="">All Schedules</option>
+                    {schedules.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </>
+              )}
+
+              {/* Item 3: Program filters */}
+              {activeTab === 'programs' && (
+                <>
+                  <select value={progStatusFilter} onChange={e => setProgStatusFilter(e.target.value)} className="form-input w-full sm:w-36">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option><option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option><option value="draft">Draft</option>
+                  </select>
+                  <select value={progCategoryFilter} onChange={e => setProgCategoryFilter(e.target.value)} className="form-input w-full sm:w-36">
+                    <option value="">All Categories</option>
+                    <option value="financial">Financial</option><option value="food">Food</option>
+                    <option value="medical">Medical</option><option value="educational">Educational</option>
+                    <option value="livelihood">Livelihood</option><option value="other">Other</option>
+                  </select>
+                  <select value={progSort} onChange={e => setProgSort(e.target.value)} className="form-input w-full sm:w-36">
+                    <option value="">Default Sort</option>
+                    <option value="newest">Newest First</option><option value="oldest">Oldest First</option>
+                    <option value="name">By Name</option>
+                  </select>
+                </>
+              )}
+            </div>
+
+            {/* Date range filters for transactions */}
+            {activeTab === 'transactions' && (
+              <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="form-group mb-0 flex-1">
+                  <label className="form-label text-xs">From Date</label>
+                  <input type="date" className="form-input" value={txDateFrom} onChange={e => { setTxDateFrom(e.target.value); setTxPage(1); }} />
+                </div>
+                <div className="form-group mb-0 flex-1">
+                  <label className="form-label text-xs">To Date</label>
+                  <input type="date" className="form-input" value={txDateTo} onChange={e => { setTxDateTo(e.target.value); setTxPage(1); }} />
+                </div>
+              </div>
+            )}
+
+            {/* Item 4: Archive toggle + Clear Filters */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {activeTab === 'programs' && (
+                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded border-gray-300" />
+                    <Archive size={14} /> Show Archived
+                  </label>
+                )}
+              </div>
+              {hasActiveFilters && (
+                <button onClick={clearFilters} className="btn btn-ghost btn-sm text-gray-500">
+                  <XCircle size={14} /> Clear Filters
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -148,25 +277,41 @@ export default function AdminPayouts() {
             {/* Programs Tab */}
             {activeTab === 'programs' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {programs.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase())).map((p: any) => (
-                  <div key={p.id} id={`program-card-${p.id}`} className="card">
+                {programs.map((p: any) => (
+                  <div key={p.id} id={`program-card-${p.id}`} className={`card ${p.deletedAt ? 'opacity-70 border-dashed' : ''}`}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0"><Wallet size={18} className="text-blue-600" /></div>
-                      <span className={`badge ${statusBadge[p.status]} capitalize`}>{p.status}</span>
+                      <div className="flex items-center gap-1">
+                        <span className={`badge ${statusBadge[p.status]} capitalize`}>{p.status}</span>
+                        {p.deletedAt && <span className="badge badge-warning text-xs">Archived</span>}
+                      </div>
                     </div>
                     <h3 className="font-bold text-gray-900 text-sm mb-2">{p.name}</h3>
                     <div className="flex flex-col gap-1.5 text-xs text-gray-500">
                       <div className="flex justify-between"><span>Budget:</span><span className="font-semibold text-gray-800">₱{(p.budget || 0).toLocaleString()}</span></div>
                       {p.amountPerBeneficiary && <div className="flex justify-between"><span>Per Beneficiary:</span><span className="font-semibold text-gray-800">₱{p.amountPerBeneficiary.toLocaleString()}</span></div>}
+                      <div className="flex justify-between"><span>Category:</span><span className="font-semibold text-gray-800 capitalize">{p.category}</span></div>
                       <div className="flex justify-between"><span>Schedules:</span><span className="font-semibold text-gray-800">{p.schedulesCount || 0}</span></div>
                     </div>
                     <div className="flex items-center justify-between gap-1 text-xs mt-3 pt-3 border-t border-gray-100">
-                      <span className="text-[#1e3a8a] font-semibold cursor-pointer hover:opacity-80 flex items-center gap-1">View Details <ChevronRight size={13} /></span>
-                      <button onClick={() => deleteProgram(p.id)} className="text-red-400 hover:text-red-600 text-xs font-medium">Delete</button>
+                      {p.deletedAt ? (
+                        <button onClick={() => restoreProgram(p.id, p.name)} className="text-green-600 font-semibold hover:opacity-80 flex items-center gap-1">
+                          <RotateCcw size={13} /> Restore
+                        </button>
+                      ) : (
+                        <>
+                          <span className="text-[#1e3a8a] font-semibold cursor-pointer hover:opacity-80 flex items-center gap-1">View Details <ChevronRight size={13} /></span>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => archiveProgram(p.id, p.name)} className="text-amber-500 hover:text-amber-700 text-xs font-medium flex items-center gap-1" title="Archive">
+                              <Archive size={12} /> Archive
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
-                {programs.length === 0 && <div className="col-span-3 card"><div className="empty-state"><div className="empty-state-icon"><Wallet size={28} /></div><p className="font-semibold text-gray-500">No programs yet</p></div></div>}
+                {programs.length === 0 && <div className="col-span-3 card"><div className="empty-state"><div className="empty-state-icon"><Wallet size={28} /></div><p className="font-semibold text-gray-500">{showArchived ? 'No archived programs' : 'No programs yet'}</p></div></div>}
               </div>
             )}
 
@@ -195,9 +340,9 @@ export default function AdminPayouts() {
                       </div>
                       <div className="flex items-center gap-4 lg:gap-6 flex-shrink-0">
                         {[
-                          { label: 'Total', value: s.transactionsCount || s.totalBeneficiaries || 0, color: 'text-gray-800' },
-                          { label: 'Claimed', value: s.claimedCount || s.claimed || 0, color: 'text-green-600' },
-                          { label: 'Pending', value: s.pendingCount || s.pending || 0, color: 'text-amber-600' },
+                          { label: 'Total', value: s.transactionsCount || 0, color: 'text-gray-800' },
+                          { label: 'Claimed', value: s.claimedCount || 0, color: 'text-green-600' },
+                          { label: 'Pending', value: s.pendingCount || 0, color: 'text-amber-600' },
                         ].map(stat => (
                           <div key={stat.label} className="text-center">
                             <p className={`text-xl font-extrabold ${stat.color}`}>{stat.value}</p>
@@ -214,45 +359,60 @@ export default function AdminPayouts() {
 
             {/* Transactions Tab */}
             {activeTab === 'transactions' && (
-              <div className="card p-0 overflow-hidden">
-                <div className="table-container">
-                  <table className="data-table">
-                    <thead><tr><th>Beneficiary</th><th>Schedule</th><th>Amount</th><th>Status</th><th>Claimed At</th><th>Actions</th></tr></thead>
-                    <tbody>
-                      {transactions.filter(t => !search || (t.beneficiaryName || '').toLowerCase().includes(search.toLowerCase())).length === 0 ? (
-                        <tr><td colSpan={6}><div className="empty-state"><div className="empty-state-icon"><Wallet size={28} /></div><p className="font-semibold text-gray-500">No transactions</p></div></td></tr>
-                      ) : transactions.filter(t => !search || (t.beneficiaryName || t.beneficiaryCode || '').toLowerCase().includes(search.toLowerCase())).map((t: any) => {
-                        const StatusIcon = statusIcon[t.status] ?? AlertCircle;
-                        return (
-                          <tr key={t.id}>
-                            <td>
-                              <div>
-                                <p className="font-semibold text-sm text-gray-900">{t.beneficiaryName || t.beneficiary?.resident?.firstName || `#${t.beneficiaryId}`}</p>
-                                <p className="text-xs text-gray-400 font-mono">{t.beneficiaryCode || t.beneficiary?.beneficiaryCode || ''}</p>
-                              </div>
-                            </td>
-                            <td><p className="text-sm text-gray-600 max-w-[200px] truncate">{t.scheduleName || t.schedule?.name || `Schedule #${t.scheduleId}`}</p></td>
-                            <td><span className="font-bold text-gray-900">₱{(t.amount || 0).toLocaleString()}</span></td>
-                            <td>
-                              <span className={`badge ${statusBadge[t.status]} capitalize flex items-center gap-1`}>
-                                <StatusIcon size={11} />{t.status}
-                              </span>
-                            </td>
-                            <td><span className="text-sm text-gray-600">{t.claimedAt ? format(parseISO(t.claimedAt), 'MMM d, yyyy h:mm a') : '—'}</span></td>
-                            <td>
-                              {t.status === 'pending' && (
-                                <button onClick={() => markClaimed(t.id)} className="btn btn-secondary btn-sm">
-                                  <CheckCircle size={13} /> Mark Claimed
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              <>
+                <div className="card p-0 overflow-hidden">
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead><tr><th>ID</th><th>Beneficiary</th><th>Schedule</th><th>Amount</th><th>Status</th><th>Claimed At</th><th>Actions</th></tr></thead>
+                      <tbody>
+                        {transactions.length === 0 ? (
+                          <tr><td colSpan={7}><div className="empty-state"><div className="empty-state-icon"><Wallet size={28} /></div><p className="font-semibold text-gray-500">No transactions found</p></div></td></tr>
+                        ) : transactions.map((t: any) => {
+                          const StatusIcon = statusIcon[t.status] ?? AlertCircle;
+                          return (
+                            <tr key={t.id}>
+                              <td><span className="font-mono text-xs text-gray-500">#{t.id}</span></td>
+                              <td>
+                                <div>
+                                  <p className="font-semibold text-sm text-gray-900">{t.beneficiary?.resident?.firstName ? `${t.beneficiary.resident.firstName} ${t.beneficiary.resident.lastName}` : `#${t.beneficiaryId}`}</p>
+                                  <p className="text-xs text-gray-400 font-mono">{t.beneficiary?.beneficiaryCode || ''}</p>
+                                </div>
+                              </td>
+                              <td><p className="text-sm text-gray-600 max-w-[200px] truncate">{t.schedule?.name || `Schedule #${t.scheduleId}`}</p></td>
+                              <td><span className="font-bold text-gray-900">₱{(t.amount || 0).toLocaleString()}</span></td>
+                              <td>
+                                <span className={`badge ${statusBadge[t.status]} capitalize flex items-center gap-1`}>
+                                  <StatusIcon size={11} />{t.status}
+                                </span>
+                              </td>
+                              <td><span className="text-sm text-gray-600">{t.claimedAt ? format(parseISO(t.claimedAt), 'MMM d, yyyy h:mm a') : '—'}</span></td>
+                              <td>
+                                {t.status === 'pending' && (
+                                  <button onClick={() => markClaimed(t.id)} className="btn btn-secondary btn-sm">
+                                    <CheckCircle size={13} /> Mark Claimed
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+
+                {/* Pagination */}
+                {txTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <p className="text-sm text-gray-500">Showing {transactions.length} of {txTotal} transactions</p>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setTxPage(p => Math.max(1, p - 1))} disabled={txPage <= 1} className="btn btn-ghost btn-sm disabled:opacity-50">Previous</button>
+                      <span className="text-sm text-gray-600">Page {txPage} of {txTotalPages}</span>
+                      <button onClick={() => setTxPage(p => Math.min(txTotalPages, p + 1))} disabled={txPage >= txTotalPages} className="btn btn-ghost btn-sm disabled:opacity-50">Next</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -291,7 +451,7 @@ export default function AdminPayouts() {
                     <div className="form-group"><label className="form-label form-label-required">Program</label>
                       <select className="form-input" value={formData.programId} onChange={e => setFormData((p: any) => ({ ...p, programId: e.target.value }))}>
                         <option value="">Select program...</option>
-                        {programs.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {programs.filter((p: any) => !p.deletedAt).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select></div>
                     <div className="form-group"><label className="form-label form-label-required">Schedule Name</label>
                       <input type="text" className="form-input" placeholder="e.g., August 2026 Senior Citizen Payout" value={formData.name} onChange={e => setFormData((p: any) => ({ ...p, name: e.target.value }))} /></div>

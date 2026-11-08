@@ -177,18 +177,33 @@ export default function AdminDashboard() {
 
         {/* Alert: Low Stock */}
         {stats.lowStockItems > 0 && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 mb-6 animate-fade-in">
-            <AlertTriangle size={18} className="text-amber-500 flex-shrink-0" />
-            <div className="flex-1">
-              <span className="font-semibold text-sm">Attention: </span>
-              <span className="text-sm">
-                {stats.lowStockItems} resource item(s) are running low on stock.{' '}
-                {stats.outOfStockItems > 0 && `${stats.outOfStockItems} item(s) out of stock.`}
-              </span>
+          <div className="flex flex-col gap-2 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 mb-6 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <AlertTriangle size={18} className="text-amber-500 flex-shrink-0" />
+              <div className="flex-1">
+                <span className="font-semibold text-sm">Attention: </span>
+                <span className="text-sm">
+                  {stats.lowStockItems} resource item(s) are running low on stock.{' '}
+                  {stats.outOfStockItems > 0 && `${stats.outOfStockItems} item(s) out of stock.`}
+                </span>
+              </div>
+              <Link to="/admin/resources" className="text-sm font-semibold text-amber-700 hover:underline whitespace-nowrap">
+                Manage →
+              </Link>
             </div>
-            <Link to="/admin/resources" className="text-sm font-semibold text-amber-700 hover:underline whitespace-nowrap">
-              Manage →
-            </Link>
+            {(stats as any).lowStockResources && (stats as any).lowStockResources.length > 0 && (
+              <div className="ml-8 mt-1 flex flex-col gap-1">
+                {(stats as any).lowStockResources.slice(0, 5).map((r: any) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.status === 'out_of_stock' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                    <span className="font-medium">{r.name}</span>
+                    <span className="text-amber-600">
+                      {r.quantity} {r.unit} {r.status === 'out_of_stock' ? '(OUT OF STOCK)' : `(threshold: ${r.lowStockThreshold})`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
