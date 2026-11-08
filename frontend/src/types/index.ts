@@ -344,3 +344,58 @@ export interface ReportFilter {
   status?: string;
   format?: 'pdf' | 'excel';
 }
+
+// ---- Data Privacy (R.A. 10173) ----
+export interface PrivacySection {
+  id: string;
+  title: string;
+  icon: string;
+  content: string;
+  points?: string[];
+}
+
+export interface PrivacyDPO {
+  title: string;
+  office: string;
+  email: string;
+  contact: string;
+  address: string;
+  jurisdiction?: string;
+}
+
+export interface PrivacyNoticeData {
+  version: string;
+  lastUpdated: string;
+  title: string;
+  subtitle: string;
+  message: string;
+  dpo: PrivacyDPO;
+  sections: PrivacySection[];
+}
+
+export interface PrivacyConsentStatus {
+  consented: boolean;
+  currentVersion: string;
+  userConsent: {
+    id: number;
+    status: 'agreed' | 'declined';
+    version: string;
+    purpose: string;
+    createdAt: string;
+  } | null;
+}
+
+export interface PrivacyConsentRecord {
+  id: number;
+  userId: number;
+  consentStatus: 'agreed' | 'declined';
+  privacyVersion: string;
+  consentPurpose: string;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  role?: string;
+}

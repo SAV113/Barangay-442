@@ -5,6 +5,7 @@ import {
   MapPin, Clock, Mail, Building2, Shield
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { VisitorPrivacyBanner } from '../privacy/VisitorPrivacyBanner';
 
 const navLinks = [
   { label: 'Home', to: '/' },
@@ -306,6 +307,7 @@ export function PublicFooter() {
           <p>Developed for BSIT Capstone Project</p>
         </div>
       </div>
+      <VisitorPrivacyBanner />
     </footer>
   );
 }

@@ -155,6 +155,21 @@ router.post('/register', (req, res) => {
       console.error('[Auth] Failed to auto-register beneficiary:', benErr);
     }
 
+    // Record Data Privacy Consent (R.A. 10173)
+    try {
+      const privacyVerSetting = db.prepare('SELECT setting_value FROM settings WHERE setting_key = ?').get('privacy_notice_version');
+      const activeVersion = privacyVerSetting ? privacyVerSetting.setting_value : '1.0';
+      const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+      const userAgent = req.headers['user-agent'] || 'Unknown';
+
+      db.prepare(`
+        INSERT INTO privacy_consents (user_id, consent_status, privacy_version, consent_purpose, ip_address, user_agent)
+        VALUES (?, 'agreed', ?, 'registration_consent', ?, ?)
+      `).run(newUser.id, activeVersion, String(clientIp), String(userAgent));
+    } catch (privacyErr) {
+      console.error('[Auth] Failed to record registration privacy consent:', privacyErr);
+    }
+
     // Log registration with Data Privacy Act compliance note
     db.prepare(
       'INSERT INTO audit_logs (user_id, user_name, action, module, details) VALUES (?, ?, ?, ?, ?)'

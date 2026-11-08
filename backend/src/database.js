@@ -244,6 +244,33 @@ function initializeDatabase() {
   // Item 6: Low-stock notification tracking (avoid duplicates)
   try { db.exec("ALTER TABLE resources ADD COLUMN low_stock_notified INTEGER DEFAULT 0"); } catch (e) {}
 
+  // Data Privacy Consent Notice (R.A. 10173) table & default settings
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS privacy_consents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        consent_status TEXT NOT NULL CHECK(consent_status IN ('agreed', 'declined')),
+        privacy_version TEXT NOT NULL DEFAULT '1.0',
+        consent_purpose TEXT NOT NULL DEFAULT 'barangay_services_operation',
+        ip_address TEXT,
+        user_agent TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_privacy_consents_user ON privacy_consents(user_id, privacy_version);
+
+      INSERT OR IGNORE INTO settings (setting_key, setting_value, description) VALUES
+        ('privacy_notice_version', '1.0', 'Current active Data Privacy Notice version'),
+        ('privacy_notice_last_updated', '2026-11-01', 'Date of last revision for Data Privacy Notice'),
+        ('privacy_dpo_name', 'Barangay 442 Data Protection Officer', 'Official DPO representative name'),
+        ('privacy_dpo_email', 'dpo@barangay442.gov.ph', 'Official DPO contact email'),
+        ('privacy_dpo_contact', '+63 2 8XXX-XXXX', 'Official DPO contact number');
+    `);
+  } catch (e) {
+    console.error('[DB] Privacy consents migration error:', e);
+  }
+
   // Backfill: set expiration_date for existing published announcements (3 months from published_at)
   try {
     db.exec(`

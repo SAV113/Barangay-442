@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
-import type { AuthResponse } from '../types';
+import type { AuthResponse, PrivacyNoticeData, PrivacyConsentStatus, PrivacyConsentRecord } from '../types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://masic-backend.onrender.com' : '/api');
 
@@ -219,6 +219,22 @@ export const usersApi = {
 export const settingsApi = {
   getAll: () => api.get('/settings'),
   update: (key: string, value: string) => api.patch(`/settings/${key}`, { value }),
+};
+
+// ---- Data Privacy (R.A. 10173) ----
+export const privacyApi = {
+  getNotice: () => api.get<PrivacyNoticeData>('/privacy/notice'),
+  getStatus: () => api.get<PrivacyConsentStatus>('/privacy/status'),
+  submitConsent: (data: { consentStatus: 'agreed' | 'declined'; version?: string; purpose?: string }) =>
+    api.post<{ success: boolean; consentStatus: string; version: string; consented: boolean; recordedAt: string; message: string }>(
+      '/privacy/consent',
+      data
+    ),
+  getConsents: (params?: Record<string, unknown>) =>
+    api.get<{ data: PrivacyConsentRecord[]; meta: { total: number; page: number; limit: number; totalPages: number } }>(
+      '/privacy/consents',
+      { params }
+    ),
 };
 
 export default api;

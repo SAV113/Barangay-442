@@ -23,6 +23,11 @@ const settingLabels: Record<string, { label: string; section: string }> = {
   two_factor_auth: { label: 'Two-factor authentication', section: 'security' },
   session_timeout: { label: 'Session timeout', section: 'security' },
   audit_logging: { label: 'Audit logging', section: 'security' },
+  privacy_notice_version: { label: 'Active Privacy Notice Version (e.g. 1.0)', section: 'privacy' },
+  privacy_notice_last_updated: { label: 'Notice Last Updated Date', section: 'privacy' },
+  privacy_dpo_name: { label: 'Data Protection Officer Name', section: 'privacy' },
+  privacy_dpo_email: { label: 'DPO Email Address', section: 'privacy' },
+  privacy_dpo_contact: { label: 'DPO Contact Number', section: 'privacy' },
 };
 
 export default function AdminSettings() {
@@ -86,6 +91,7 @@ export default function AdminSettings() {
   const barangaySettings = settings.filter(s => settingLabels[s.settingKey]?.section === 'barangay');
   const notificationSettings = settings.filter(s => settingLabels[s.settingKey]?.section === 'notifications');
   const securitySettings = settings.filter(s => settingLabels[s.settingKey]?.section === 'security');
+  const privacySettings = settings.filter(s => settingLabels[s.settingKey]?.section === 'privacy');
   // For any unknown settings, show them in barangay section
   const unknownSettings = settings.filter(s => !settingLabels[s.settingKey]);
 
@@ -166,6 +172,39 @@ export default function AdminSettings() {
                       onChange={e => handleChange(s.settingKey, e.target.checked ? 'true' : 'false')} className="sr-only peer" />
                     <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-[#14b8a6] transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
                   </label>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Data Privacy Notice & Compliance (R.A. 10173) */}
+        {privacySettings.length > 0 && (
+          <div className="card mb-5">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center">
+                <Shield size={18} className="text-teal-700" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-900">Data Privacy & Compliance (R.A. 10173)</h2>
+                <p className="text-xs text-gray-500">Configure active privacy policy version and DPO contact details</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-4">
+              {privacySettings.map(s => (
+                <div key={s.settingKey} className="form-group">
+                  <label className="form-label">{settingLabels[s.settingKey]?.label || s.settingKey}</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formValues[s.settingKey] || ''}
+                    onChange={e => handleChange(s.settingKey, e.target.value)}
+                  />
+                  {s.settingKey === 'privacy_notice_version' && (
+                    <span className="form-hint text-xs text-amber-600">
+                      Note: Changing the version number (e.g., from 1.0 to 1.1) will automatically prompt all registered users to review and re-consent upon next login.
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

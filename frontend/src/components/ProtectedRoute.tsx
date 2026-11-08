@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { privacyApi } from '../services/api';
+import { PrivacyConsentModal } from './privacy/PrivacyConsentModal';
 import type { UserRole } from '../types';
 
 interface ProtectedRouteProps {
@@ -14,15 +16,48 @@ export function ProtectedRoute({
   allowedRoles,
   redirectTo = '/login',
 }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, logout } = useAuth();
   const location = useLocation();
+  const [checkingConsent, setCheckingConsent] = useState(true);
+  const [hasConsented, setHasConsented] = useState<boolean>(true);
+  const [requiredVersion, setRequiredVersion] = useState<string>('1.0');
 
-  if (isLoading) {
+  useEffect(() => {
+    let isMounted = true;
+
+    if (isAuthenticated && user) {
+      // Validate consent in database via backend
+      privacyApi
+        .getStatus()
+        .then((res) => {
+          if (!isMounted) return;
+          const { consented, currentVersion } = res.data;
+          setRequiredVersion(currentVersion || '1.0');
+          setHasConsented(Boolean(consented));
+          setCheckingConsent(false);
+        })
+        .catch(() => {
+          if (!isMounted) return;
+          // Fallback to locally cached consent version if network is temporarily unreachable
+          const cachedVer = localStorage.getItem('masid_privacy_consented_version');
+          setHasConsented(cachedVer === '1.0');
+          setCheckingConsent(false);
+        });
+    } else {
+      setCheckingConsent(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, user]);
+
+  if (isLoading || (isAuthenticated && checkingConsent)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">
           <div className="spinner" style={{ width: 40, height: 40 }} />
-          <p className="text-gray-500 text-sm font-medium">Loading MASID...</p>
+          <p className="text-gray-500 text-sm font-medium">Verifying authorization and privacy compliance...</p>
         </div>
       </div>
     );
@@ -40,7 +75,17 @@ export function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <PrivacyConsentModal
+        isOpen={!hasConsented}
+        requiredVersion={requiredVersion}
+        onConsentSuccess={() => setHasConsented(true)}
+        onDeclineLogout={logout}
+      />
+      {hasConsented ? children : null}
+    </>
+  );
 }
 
 interface PublicOnlyRouteProps {

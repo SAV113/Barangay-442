@@ -43,6 +43,7 @@ const eventsRoutes = require('./routes/events');
 const notificationsRoutes = require('./routes/notifications');
 const auditLogsRoutes = require('./routes/auditLogs');
 const reportsRoutes = require('./routes/reports');
+const privacyRoutes = require('./routes/privacy');
 
 app.use('/auth', authRoutes);
 app.use('/dashboard', dashboardRoutes);
@@ -59,6 +60,7 @@ app.use('/events', eventsRoutes);
 app.use('/notifications', notificationsRoutes);
 app.use('/audit-logs', auditLogsRoutes);
 app.use('/reports', reportsRoutes);
+app.use('/privacy', privacyRoutes);
 
 // ---- Settings route (admin only) ----
 const { authenticateToken, requireRole } = require('./middleware/auth');

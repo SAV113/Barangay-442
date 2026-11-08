@@ -19,6 +19,7 @@ const EventDetailPage = lazy(() =>
 const PayoutsPage = lazy(() => import('./pages/public/PayoutsPage'));
 const AboutPage = lazy(() => import('./pages/public/AboutPage'));
 const ContactPage = lazy(() => import('./pages/public/ContactPage'));
+const PrivacyPage = lazy(() => import('./pages/public/PrivacyPage'));
 
 // Auth
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
@@ -108,6 +109,7 @@ export default function App() {
             <Route path="/resources" element={<ServicesPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
 
             {/* ===== AUTH ROUTES ===== */}
             <Route
